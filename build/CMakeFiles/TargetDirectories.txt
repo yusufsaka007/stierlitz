@@ -1,0 +1,3 @@
+/home/viv4ldi/Desktop/Projects/stierlitz/build/CMakeFiles/StierlitzServer.dir
+/home/viv4ldi/Desktop/Projects/stierlitz/build/CMakeFiles/edit_cache.dir
+/home/viv4ldi/Desktop/Projects/stierlitz/build/CMakeFiles/rebuild_cache.dir

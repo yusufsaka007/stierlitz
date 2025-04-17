@@ -1,0 +1,1 @@
+/usr/bin/g++ -g -Wl,--dependency-file=CMakeFiles/StierlitzServer.dir/link.d CMakeFiles/StierlitzServer.dir/Server/src/client_handler.cpp.o CMakeFiles/StierlitzServer.dir/Server/src/main.cpp.o CMakeFiles/StierlitzServer.dir/Server/src/server.cpp.o -o /home/viv4ldi/Desktop/Projects/stierlitz/bin/StierlitzServer
