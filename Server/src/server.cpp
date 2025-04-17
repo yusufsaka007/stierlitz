@@ -34,6 +34,7 @@ int Server::init() {
         return -1;
     }
 
+    memset(&server_addr_, 0, sizeof(server_addr_));
     server_addr_.sin_family = AF_INET;
     server_addr_.sin_port = htons(port_);
     rc = inet_pton(AF_INET, ip_.c_str(), &server_addr_.sin_addr);
@@ -58,6 +59,8 @@ int Server::init() {
         return -1;
     }
 
+    threads_.resize(max_connections_);
+
     return 0;
 }
 
@@ -65,12 +68,105 @@ void Server::start() {
     int rc = 0;
     clients_ = new ClientHandler*[max_connections_];
     for (int i = 0; i < max_connections_; i++) {
-        clients_[i] = new ClientHandler();
+        clients_[i] = nullptr;
     }
 
+    /**
+     * Sarts the threads for 
+     * accepting (which will start the client threads upon connection)
+     * command executor
+     * logger
+     */
+
+     std::thread accept_thread(&Server::accept_client, this);
+}
+
+int Server::accept_client() {
+    int rc;
+    int client_socket;
+    struct sockaddr_in client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    bool slot_found = false;
+
     while (!shutdown_flag_) {
-        
+        // Wait for a free slot in clients_ or shutdown signal
+        std::unique_lock<std::mutex> lock(accept_mutex_);
+        accept_cv_.wait(lock, [this] {return client_count_ < max_connections_ || shutdown_flag_;});
+        if (shutdown_flag_) {
+            std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET << std::endl;
+            return 0;
+        }
+
+        ClientHandler* client = nullptr;
+
+        client_socket = accept(server_socket_, (struct sockaddr*) &client_addr, &addr_len);
+        if (client_socket < 0) {
+            if (errno == EINTR) {
+                std::cerr << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET << std::endl;
+                return 0;
+            } else {
+                std::cerr << RED << "[Server::accept_client] Error accepting client: " << strerror(errno) << RESET << std::endl;
+                return -1;
+            }
+        } else {
+            std::cout << GREEN << "[Server::accept_client] Client connected" << RESET << std::endl;
+            
+            {
+                // Search for a free slot in clients_ for the new client
+                std::lock_guard<std::mutex> lock(client_mutex_);
+                for (int i = 0; i < max_connections_; i++) {
+                    if (clients_[i] == nullptr) {
+                        client = new ClientHandler();
+                        if (client == nullptr) {
+                            std::cerr << RED << "[Server::accept_client] Error allocating memory for client" << RESET << std::endl;
+                            close(client_socket);
+                            return -1;
+                        }
+
+                        client->init_client(client_addr, client_socket, i);
+                        clients_[i] = client;
+                        client_count_++;
+                        slot_found = true;
+
+                        std::cout << GREEN << "[Server::accept_client] Client connected:" << client->ip() << RESET << std::endl;
+                        break;
+                    }
+                }
+            }
+
+            if (!slot_found){
+                std::cerr << RED << "[Server::accept_client] No free slots for new client" << RESET << std::endl;
+                close(client_socket);
+                return -1;
+            }
+            
+            // Start a new handle_client thread for the client
+            threads_[client->index()] = std::make_unique<std::thread>(&Server::handle_client, this, client);
+            if (threads_[client->index()] == nullptr) {
+                std::cerr << RED << "[Server::accept_client] Error creating thread for client" << RESET << std::endl;
+                {
+                    std::lock_guard<std::mutex> lock(client_mutex_);
+                    client->cleanup_client();
+                    delete client;
+                    clients_[client->index()] = nullptr;
+                    client_count_--;
+                }
+                return -1;
+            }
+        }
     }
+}
+
+void Server::handle_client(ClientHandler* client) {
+    
+}
+
+void Server::handle_command() {
+
+}
+
+void Server::console_logger() {
+
 }
 
 void Server::shutdown() { 

@@ -8,14 +8,9 @@
 #include "client_handler.hpp"
 
 ClientHandler::ClientHandler() {
-    addr_len_ = sizeof(client_addr_);
+    addr_len_ = sizeof(addr_);
     set_values();
 }
-
-int ClientHandler::get_client_socket() const {
-    return client_socket_;
-}
-
 
 int ClientHandler::is_client_up(const int __fd) {
     char buf;
@@ -30,23 +25,35 @@ int ClientHandler::is_client_up(const int __fd) {
     return 0;
 }
 
-void ClientHandler::init_client(sockaddr_in_ __client_addr, int __client_socket, int __index) {
-    client_addr_ = __client_addr;
-    client_socket_ = __client_socket;
+void ClientHandler::init_client(sockaddr_in __client_addr, int __client_socket, int __index) {
+    addr_ = __client_addr;
+    socket_ = __client_socket;
     index_ = __index;
-    ip_ = inet_ntoa(client_addr_.sin_addr);
+    ip_ = inet_ntoa(addr_.sin_addr);
+}
+
+int ClientHandler::socket() const {
+    return socket_;
+}
+
+std::string ClientHandler::ip() const {
+    return ip_; 
+}
+
+int ClientHandler::index() const {
+    return index_;
 }
 
 void ClientHandler::set_values() {
-    client_socket_ = -1;
+    socket_ = -1;
     ip_ = "";
     index_ = -1;
-    bzero(client_addr_, addr_len_);
+    memset(&addr_, 0, addr_len_);
 }
 
 void ClientHandler::cleanup_client() {
-    if (ClientHandler::is_client_up(client_socket_) == 0) {
-        close(client_socket_);
+    if (ClientHandler::is_client_up(socket_) == 0) {
+        close(socket_);
     }
 
     set_values();

@@ -1,21 +1,29 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(StierlitzServer)
+project(Stierlitz)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug) # DEBUG
 
-# For Server
+# Directories
 set(SERVER_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/Server/include)
 set(SERVER_SRC_DIR ${CMAKE_SOURCE_DIR}/Server/src)
+set(DATA_HANDLER_DIR ${CMAKE_SOURCE_DIR}/DataHandler)
 set(BIN_DIR ${CMAKE_SOURCE_DIR}/bin)
-set(NLOHMANN_JSON_DIR "/usr/local/include/nlohmann")
+set(NLOHMANN_JSON_DIR "/usr/local/include/nlohmann") # JSON library path
 
-include_directories(${SERVER_INCLUDE_DIR})
-include_directories(${NLOHMANN_JSON_DIR})
-
-file(GLOB_RECURSE SERVER_SRC_FILES ${SERVER_SRC_DIR}/*.cpp)
-
+# Output directory for binaries
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DIR})
-add_executable(StierlitzServer ${SERVER_SRC_FILES})
+
+# DataHandler library (shared by both client and server)
+file(GLOB_RECURSE COMMON_SRC_FILES ${DATA_HANDLER_DIR}/*.cpp)
+add_library(DataHandler ${COMMON_SRC_FILES})
+
+# server target
+file(GLOB_RECURSE SERVER_SRC_FILES ${SERVER_SRC_DIR}/*.cpp)
+add_executable(server ${SERVER_SRC_FILES})
+
+target_link_libraries(server PRIVATE DataHandler)
+target_compile_definitions(server PRIVATE SERVER)
+target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${NLOHMANN_JSON_DIR})

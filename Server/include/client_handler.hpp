@@ -7,19 +7,22 @@
 #include <unistd.h>
 #include <queue>
 #include <sstream>
+#include <cstring>
 
 class ClientHandler{
 public:
     ClientHandler();
     static int is_client_up(const int __fd);
     void cleanup_client();
-    int get_client_socket() const;
-    void init_client(sockaddr_in_ __client_addr, int __client_socket, int __index);
+    void init_client(sockaddr_in __client_addr, int __client_socket, int __index);
+    int socket() const;
+    std::string ip() const;
+    int index() const;
 private:
     void set_values();
-    int client_socket_;
+    int socket_;
     std::string ip_;
-    struct sockaddr_in client_addr_;
+    struct sockaddr_in addr_;
     socklen_t addr_len_;
     int index_;
 };

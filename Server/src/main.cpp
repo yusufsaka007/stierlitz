@@ -14,7 +14,7 @@ static void sigterm_handler(int signum) {
     server->shutdown();
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     int rc = 0;
     struct sigaction sa;
     sa.sa_handler = sigterm_handler;
