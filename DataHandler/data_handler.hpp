@@ -20,7 +20,6 @@ struct ScopedEpollFD {
     int fd = -1;
     ScopedEpollFD();
     ~ScopedEpollFD();
-    void set_fd(int __fd);
 };
 
 #ifdef SERVER

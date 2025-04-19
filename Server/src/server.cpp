@@ -96,9 +96,11 @@ void Server::start() {
      * logger
      */
 
-     std::thread accept_thread(&Server::accept_client, this);
+    std::thread accept_thread(&Server::accept_client, this);
+    std::thread logger_thread(&Server::log_event, this);
 
-     accept_thread.join();
+    logger_thread.join();
+    accept_thread.join();
 }
 
 int Server::accept_client() {
@@ -107,6 +109,7 @@ int Server::accept_client() {
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
     bool slot_found;
+    std::stringstream event_log;
 
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
@@ -144,7 +147,9 @@ int Server::accept_client() {
             return 0;
         }
 
-        std::cout << GREEN << "[Server::accept_client] Waiting for client connection" << RESET << std::endl;
+        // std::cout << GREEN << "[Server::accept_client] Waiting for client connection" << RESET << std::endl;
+        event_log << GREEN << "[Server::accept_client] Waiting for client connection";
+        log(event_log);
         
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
         if (nfds == -1) {
@@ -159,7 +164,10 @@ int Server::accept_client() {
         
         for (int i=0; i<nfds; i++) {
             if (events[i].data.fd == shutdown_event_fd_.fd) {
-                std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET << std::endl;
+                //std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET << std::endl;
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received";
+                log(event_log);
+
                 uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 return 0;
@@ -188,7 +196,11 @@ int Server::accept_client() {
                             clients_[i] = client;
                             client_count_++;
                             slot_found = true;
-                            std::cout << GREEN << "[Server::accept_client] New connection from: " << client->ip() << RESET << std::endl;
+                            // std::cout << GREEN << "[Server::accept_client] New connection from: " << client->ip() << RESET << std::endl;
+                            
+                            event_log << GREEN << "[Server::accept_client] New connection from: " << client->ip();
+                            log(event_log);
+                            
                             break;
                         }
                     }
@@ -200,6 +212,11 @@ int Server::accept_client() {
                 }
                 // Start a new handle_client thread for the client
                 try {
+                    if (threads_[client->index()] != nullptr && threads_[client->index()]->joinable()) {
+                        threads_[client->index()]->join();
+                    }
+                    log(event_log);
+
                     threads_[client->index()] = std::make_unique<std::thread>(&Server::handle_client, this, client);
                 } catch (const std::system_error& e) {
                     std::cerr << RED << "[Server::accept_client] Error creating thread for client" << RESET << std::endl;
@@ -224,6 +241,7 @@ void Server::handle_client(ClientHandler* client) {
     char buffer[MAX_BUFFER_SIZE];
     int recv_rc;
     int send_rc;
+    std::stringstream event_log;
 
     while (!shutdown_flag_) {
         memset(buffer, 0, sizeof(buffer));
@@ -236,7 +254,10 @@ void Server::handle_client(ClientHandler* client) {
             break; // @todo find a better way to handle client disconnection
         } else {
             // Test
-            std::cout << GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET << std::endl;
+            //std::cout << GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET << std::endl;
+            event_log <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer;
+            log(event_log);
+
             send_rc = send_buf(client->socket(), buffer, recv_rc, shutdown_flag_);
             if (send_rc < 0) {
                 std::cerr << RED << "[Server::handle_client] Client " << client->index() << " failed: " << send_rc << RESET << std::endl;
@@ -259,11 +280,33 @@ void Server::handle_client(ClientHandler* client) {
     }
 }
 
-void Server::handle_command() {
-
+void Server::log(std::stringstream& __event_log) {
+    {
+        std::lock_guard<std::mutex> lock(log_mutex_);
+        log_queue_.push(__event_log.str());
+        log_cv_.notify_one();
+    }
+    __event_log.str("");
 }
 
-void Server::console_logger() {
+void Server::log_event() {
+    while (!shutdown_flag_) {
+        std::unique_lock<std::mutex> lock(log_mutex_);
+        log_cv_.wait(lock, [this] {return !log_queue_.empty() || shutdown_flag_;});
+        while (!log_queue_.empty()) {
+            std::string log_message = std::move(log_queue_.front());
+            log_queue_.pop();
+            std::cout << log_message << RESET << std::endl;
+        }
+
+        if (shutdown_flag_) {
+            std::cout << YELLOW << "[Server::log_event] Shutdown signal received" << RESET << std::endl;
+            break;
+        }
+    }
+}
+
+void Server::handle_command() {
 
 }
 

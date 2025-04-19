@@ -29,7 +29,8 @@ private: // Functions
     int accept_client();
     void handle_client(ClientHandler* client);
     void handle_command();
-    void console_logger();
+    void log_event();
+    void log(std::stringstream& __event_log);
 private: // Variables
     uint32_t port_;
     std::string ip_;
