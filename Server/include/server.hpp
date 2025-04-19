@@ -9,9 +9,13 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <fcntl.h>
 #include <vector>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include "client_handler.hpp"
 #include "server_macros.hpp"
+#include "data_handler.hpp"
 
 class Server {
 public:
@@ -35,7 +39,8 @@ private: // Variables
 
     struct sockaddr_in server_addr_;
     int server_socket_;
-    
+    ScopedEpollFD shutdown_event_fd_;
+
     ClientHandler** clients_;
     int client_count_ = 0;
     std::vector<std::unique_ptr<std::thread>> threads_;

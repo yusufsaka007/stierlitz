@@ -10,7 +10,6 @@
 std::unique_ptr<Server> server;
 
 static void sigterm_handler(int signum) {
-    std::cerr << YELLOW << "[main] Received signal " << signum << ", stopping server" << RESET << std::endl;
     server->shutdown();
 }
 
@@ -24,11 +23,11 @@ int main(int argc, char* argv[]) {
     sigaction(SIGTERM, &sa, NULL);
 
     if (argc == 3) {
-        server = std::make_unique<Server>(atoi(argv[1]), argv[2], argv[3], argv[4], atoi(argv[5]));
+        server = std::make_unique<Server>(argv[1], atoi(argv[2]), atoi(argv[5]));
     } else if (argc == 1) {
         server = std::make_unique<Server>();
     } else {
-        std::cerr << YELLOW << "Usage: " << argv[0] << " <port> <ip> <username> <password> <max_connections>" << RESET << std::endl;
+        std::cerr << YELLOW << "Usage: " << argv[0] << " <ip> <port> <max_connections>" << RESET << std::endl;
         return 0;
     }
 

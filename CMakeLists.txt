@@ -18,12 +18,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DIR})
 
 # DataHandler library (shared by both client and server)
 file(GLOB_RECURSE COMMON_SRC_FILES ${DATA_HANDLER_DIR}/*.cpp)
-add_library(DataHandler ${COMMON_SRC_FILES})
+add_library(DataHandlerServer ${COMMON_SRC_FILES})
+target_compile_definitions(DataHandlerServer PRIVATE SERVER)
 
 # server target
 file(GLOB_RECURSE SERVER_SRC_FILES ${SERVER_SRC_DIR}/*.cpp)
 add_executable(server ${SERVER_SRC_FILES})
-
-target_link_libraries(server PRIVATE DataHandler)
 target_compile_definitions(server PRIVATE SERVER)
-target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${NLOHMANN_JSON_DIR})
+
+target_link_libraries(server PRIVATE DataHandlerServer)
+target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${DATA_HANDLER_DIR} ${NLOHMANN_JSON_DIR})
