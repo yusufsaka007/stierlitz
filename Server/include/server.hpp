@@ -13,6 +13,7 @@
 #include <vector>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include "event_logger.hpp"
 #include "client_handler.hpp"
 #include "server_macros.hpp"
 #include "data_handler.hpp"
@@ -35,6 +36,7 @@ private: // Variables
     uint32_t port_;
     std::string ip_;
     uint8_t max_connections_;
+    int user_verbosity_ = 0;
 
     std::atomic<bool> shutdown_flag_ = false;;
 

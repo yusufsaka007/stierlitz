@@ -10,6 +10,7 @@ Server::Server() {
     port_ = DEFAULT_PORT;
     ip_ = DEFAULT_IP;
     max_connections_ = DEFAULT_MAX_CONNECTIONS;
+    user_verbosity_ = DEFAULT_VERBOSITY;
 }
 Server::Server(const std::string& __ip, const uint32_t __port, const uint8_t __max_connections) {
     port_ = __port;
@@ -88,13 +89,6 @@ void Server::start() {
     for (int i = 0; i < max_connections_; i++) {
         clients_[i] = nullptr;
     }
-
-    /**
-     * Sarts the threads for 
-     * accepting (which will start the client threads upon connection)
-     * command executor
-     * logger
-     */
 
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
@@ -241,7 +235,7 @@ void Server::handle_client(ClientHandler* client) {
     char buffer[MAX_BUFFER_SIZE];
     int recv_rc;
     int send_rc;
-    std::stringstream event_log;
+    EventLog event_log(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
 
     while (!shutdown_flag_) {
         memset(buffer, 0, sizeof(buffer));
@@ -255,9 +249,7 @@ void Server::handle_client(ClientHandler* client) {
         } else {
             // Test
             //std::cout << GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET << std::endl;
-            event_log <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer;
-            log(event_log);
-
+            event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;
             send_rc = send_buf(client->socket(), buffer, recv_rc, shutdown_flag_);
             if (send_rc < 0) {
                 std::cerr << RED << "[Server::handle_client] Client " << client->index() << " failed: " << send_rc << RESET << std::endl;
@@ -296,11 +288,10 @@ void Server::log_event() {
         while (!log_queue_.empty()) {
             std::string log_message = std::move(log_queue_.front());
             log_queue_.pop();
-            std::cout << log_message << RESET << std::endl;
+            std::cout << log_message << std::endl;
         }
 
         if (shutdown_flag_) {
-            std::cout << YELLOW << "[Server::log_event] Shutdown signal received" << RESET << std::endl;
             break;
         }
     }
