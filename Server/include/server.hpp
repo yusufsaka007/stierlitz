@@ -17,6 +17,7 @@
 #include "client_handler.hpp"
 #include "server_macros.hpp"
 #include "data_handler.hpp"
+#include "command_handler.hpp"
 
 class Server {
 public:

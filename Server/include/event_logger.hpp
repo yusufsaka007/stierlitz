@@ -10,6 +10,7 @@
 
 enum LogLevel {
     LOG_DEBUG = 0,
+    LOG_MUST = 0,
     LOG_MINOR_EVENTS = 1,
     LOG_CRITICAL_EVENTS = 2,
     LOG_CRASHES = 3,
