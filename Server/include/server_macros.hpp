@@ -7,7 +7,8 @@
 #define DEFAULT_VERBOSITY 1 // Print all logs
 #define MAX_BUFFER_SIZE 2048
 
-#define RESET  "\033[0m"
+#define RESET  "\033[0m\n"
+#define RESET_NO_NEWLINE "\033[0m"
 #define RED "\033[31m[-] "
 #define GREEN "\033[32m[+] "
 #define YELLOW "\033[33m[!] "

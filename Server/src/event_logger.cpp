@@ -23,7 +23,7 @@ EventLog& EventLog::operator<<(const char* value) {
     if (log_verbosity_ < *p_user_verbosity_) {
         return *this;
     }
-    if (std::string(value) == RESET) {
+    if (std::string(value) == RESET || std::string(value) == RESET_NO_NEWLINE) {
         {
             log_stream_ << value;
             std::lock_guard<std::mutex> lock(*p_log_mutex_);
@@ -43,7 +43,7 @@ EventLog& EventLog::operator<<(const std::string& value) {
     if (log_verbosity_ < *p_user_verbosity_) {
         return *this;
     }
-    if (value == RESET) {
+    if (value == RESET || value == RESET_NO_NEWLINE) {
         {
             log_stream_ << value;
             std::lock_guard<std::mutex> lock(*p_log_mutex_);

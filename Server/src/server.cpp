@@ -78,6 +78,7 @@ int Server::init() {
         return -1;
     }
 
+    clients_ = nullptr;
     shutdown_event_fd_.fd = eventfd(0, EFD_NONBLOCK);
     threads_.resize(max_connections_);
     return 0;
@@ -92,11 +93,11 @@ void Server::start() {
 
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
-    std::thread c2_thread(&Server::handle_command, this);
+    //std::thread c2_thread(&Server::handle_command, this);
 
     logger_thread.join();
     accept_thread.join();
-    c2_thread.join();
+    //c2_thread.join();
 }
 
 int Server::accept_client() {
@@ -105,7 +106,7 @@ int Server::accept_client() {
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
     bool slot_found;
-    std::stringstream event_log;
+    EventLog event_log(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
 
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
@@ -144,8 +145,7 @@ int Server::accept_client() {
         }
 
         // std::cout << GREEN << "[Server::accept_client] Waiting for client connection" << RESET << std::endl;
-        event_log << GREEN << "[Server::accept_client] Waiting for client connection";
-        log(event_log);
+        event_log << GREEN << "[Server::accept_client] Waiting for client connection" << RESET;
         
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
         if (nfds == -1) {
@@ -161,8 +161,7 @@ int Server::accept_client() {
         for (int i=0; i<nfds; i++) {
             if (events[i].data.fd == shutdown_event_fd_.fd) {
                 //std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET << std::endl;
-                event_log << YELLOW << "[Server::accept_client] Shutdown signal received";
-                log(event_log);
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
 
                 uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
@@ -194,8 +193,7 @@ int Server::accept_client() {
                             slot_found = true;
                             // std::cout << GREEN << "[Server::accept_client] New connection from: " << client->ip() << RESET << std::endl;
                             
-                            event_log << GREEN << "[Server::accept_client] New connection from: " << client->ip();
-                            log(event_log);
+                            event_log << GREEN << "[Server::accept_client] New connection from: " << client->ip() << RESET;
                             
                             break;
                         }
@@ -211,7 +209,6 @@ int Server::accept_client() {
                     if (threads_[client->index()] != nullptr && threads_[client->index()]->joinable()) {
                         threads_[client->index()]->join();
                     }
-                    log(event_log);
 
                     threads_[client->index()] = std::make_unique<std::thread>(&Server::handle_client, this, client);
                 } catch (const std::system_error& e) {
@@ -290,7 +287,7 @@ void Server::log_event() {
         while (!log_queue_.empty()) {
             std::string log_message = std::move(log_queue_.front());
             log_queue_.pop();
-            std::cout << log_message << std::endl;
+            std::cout << log_message;
         }
 
         if (shutdown_flag_) {
@@ -300,19 +297,11 @@ void Server::log_event() {
 }
 
 void Server::handle_command() {
-    std::string command;
     EventLog event_log(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
-    CommandHandler command_handler(&clients_, &event_log);
-
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_);
     while (!shutdown_flag_) {
-        event_log << LOG_MUST << "stierlitz > "
-        std::getline(std::cin, command);
-        if (command == "exit") {
-            shutdown();
-            break;
-        } else {
-            command_handler.execute_command(command);
-        } 
+        event_log << LOG_MUST << CYAN << "stierlitz> " << RESET_NO_NEWLINE;
+        command_handler.execute_command();
     }
 }
 
@@ -326,16 +315,17 @@ void Server::shutdown() {
             thread->join();
         }
     }
-
-    for (int i = 0; i < max_connections_; i++) {
-        if (clients_[i] != nullptr) {
-            clients_[i]->cleanup_client();
-            delete clients_[i];
+    if (clients_ != nullptr) {
+        for (int i = 0; i < max_connections_; i++) {
+            if (clients_[i] != nullptr) {
+                clients_[i]->cleanup_client();
+                delete clients_[i];
+            }
         }
+    
+        delete[] clients_;
     }
 
-    delete[] clients_;
-    
     if (server_socket_ != -1) {
         close(server_socket_);
     }
