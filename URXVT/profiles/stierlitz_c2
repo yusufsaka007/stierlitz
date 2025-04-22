@@ -1,0 +1,6 @@
+stierlitz_c2*foreground: #00FF00
+stierlitz_c2*background: #000000
+stierlitz_c2*font: xft:Monospace:pixelsize=14
+stierlitz_c2*cursorColor: #FF00FF
+stierlitz_c2*saveLines: 100
+stierlitz_c2*inheritPixmap: false

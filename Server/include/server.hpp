@@ -37,7 +37,7 @@ private: // Variables
     uint32_t port_;
     std::string ip_;
     uint8_t max_connections_;
-    int user_verbosity_ = 0;
+    int user_verbosity_;
 
     std::atomic<bool> shutdown_flag_ = false;;
 
@@ -45,16 +45,17 @@ private: // Variables
     int server_socket_;
     ScopedEpollFD shutdown_event_fd_;
 
-    ClientHandler** clients_;
+    std::vector<ClientHandler*> clients_;
     int client_count_ = 0;
-    std::vector<std::unique_ptr<std::thread>> threads_;
+    std::vector<std::thread> client_threads_;
     std::mutex accept_mutex_;
     std::mutex client_mutex_;
     std::condition_variable accept_cv_;
 
-    std::mutex log_mutex_;
-    std::condition_variable log_cv_;
-    std::queue<std::string> log_queue_;
+    //std::mutex log_mutex_;
+    //std::condition_variable log_cv_;
+    //std::queue<std::string> log_queue_;
+    std::shared_ptr<LogContext> log_context_;
 };
 
 #endif // SERVER_HPP

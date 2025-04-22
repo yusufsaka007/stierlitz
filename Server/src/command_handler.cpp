@@ -29,9 +29,10 @@ Command::Command(
     }
 }
 
-CommandHandler::CommandHandler(ClientHandler*** __p_clients, EventLog* __p_event_log, std::atomic<bool>* __p_shutdown_flag) 
-:p_shutdown_flag_ (__p_shutdown_flag)
-{
+CommandHandler::CommandHandler(
+    std::vector<std::unique_ptr<ClientHandler>>* __p_clients,
+    EventLog* __p_event_log,
+    std::atomic<bool>* __p_shutdown_flag): p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag) {
     p_clients_ = __p_clients;
     p_event_log_ = __p_event_log;
 

@@ -16,6 +16,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <future>
+#include <memory>
 #include "event_logger.hpp"
 #include "server_macros.hpp"
 #include "client_handler.hpp"
@@ -63,7 +64,7 @@ struct Command {
 class CommandHandler {
 public:
     CommandHandler(
-        ClientHandler*** __p_clients, 
+        std::vector<std::unique_ptr<ClientHandler>>* __p_clients, 
         EventLog* __p_event_log,
         std::atomic<bool>* __p_shutdown_flag
     );
@@ -78,7 +79,7 @@ private:
     //int send_command();
     void cleanup();
 private:
-    ClientHandler*** p_clients_;
+    std::vector<std::unique_ptr<ClientHandler>>* p_clients_;
     EventLog* p_event_log_;
     std::atomic<bool>* p_shutdown_flag_;
     std::unordered_map<std::string,Command> command_map_;
