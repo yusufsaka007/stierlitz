@@ -26,12 +26,6 @@ struct LogContext {
 
 class EventLog {
 public:
-    EventLog(
-        std::mutex* __log_mutex, 
-        std::condition_variable* __log_cv, 
-        std::queue<std::string>* __p_log_queue, 
-        int* __p_user_verbosity
-    );
     explicit EventLog(std::shared_ptr<LogContext> context);
 
     template <typename T>

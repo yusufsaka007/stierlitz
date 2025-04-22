@@ -64,7 +64,7 @@ struct Command {
 class CommandHandler {
 public:
     CommandHandler(
-        std::vector<std::unique_ptr<ClientHandler>>* __p_clients, 
+        std::vector<ClientHandler*>* __p_clients, 
         EventLog* __p_event_log,
         std::atomic<bool>* __p_shutdown_flag
     );
@@ -79,7 +79,7 @@ private:
     //int send_command();
     void cleanup();
 private:
-    std::vector<std::unique_ptr<ClientHandler>>* p_clients_;
+    std::vector<ClientHandler*>* p_clients_;
     EventLog* p_event_log_;
     std::atomic<bool>* p_shutdown_flag_;
     std::unordered_map<std::string,Command> command_map_;

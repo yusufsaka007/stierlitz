@@ -96,11 +96,11 @@ void Server::start() {
 
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
-    //std::thread c2_thread(&Server::handle_command, this);
+    std::thread c2_thread(&Server::handle_c2, this);
 
     logger_thread.join();
     accept_thread.join();
-    //c2_thread.join();
+    c2_thread.join();
 }
 
 int Server::accept_client() {
@@ -165,7 +165,7 @@ int Server::accept_client() {
                 std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
                 //event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
 
-                uint64_t u;
+                uint8_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 return 0;
             }
@@ -279,22 +279,126 @@ void Server::log_event() {
     }
 }
 
-void Server::handle_command() {
-    EventLog event_log(log_context_);  //(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
-    //CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_);
-    while (!shutdown_flag_) {
-        event_log << LOG_MUST << CYAN << "stierlitz> " << RESET_NO_NEWLINE;
-    //    command_handler.execute_command();
+void Server::handle_c2() {
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        std::cerr << RED << "[Server::handle_c2] Error forking process: " << strerror(errno) << RESET;
+        return;
     }
+    
+    if (pid == 0) {
+        close(server_socket_);
+        close(shutdown_event_fd_.fd);
+        for (int i = 0; i < max_connections_; i++) {
+            if (clients_[i] != nullptr) {
+                close(clients_[i]->socket());
+            }
+        }
+        // Child process
+        execlp("urxvt", "urxvt", "-name", "stierlitz_c2", "-e", C2_SCRIPT_PATH, (char*)NULL);
+        std::cerr << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
+        _exit(EXIT_FAILURE);
+    }
+
+    // Parent process 
+    c2_child_pid = pid;
+
+    EventLog event_log(log_context_);
+    ScopedEpollFD epoll_fd;
+    epoll_fd.fd = epoll_create1(0);
+    if (epoll_fd.fd == -1) {
+        event_log << RED << "[Server::handle_c2] Error creating epoll instance: " << strerror(errno) << RESET;
+        return;
+    }
+
+    struct epoll_event shutdown_event;
+    shutdown_event.data.fd = shutdown_event_fd_.fd;
+    shutdown_event.events = EPOLLIN;
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, shutdown_event_fd_.fd, &shutdown_event) == -1) {
+        event_log << RED << "[Server::handle_c2] Error adding shutdown eventfd to epoll: " << strerror(errno) << RESET;
+        return;
+    }
+
+    // Wait for c2_terminal.py to create the fifo
+    int tries = 0;
+    while(!std::filesystem::exists(C2_FIFO_PATH) && tries++ < 20) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (tries >= 20) {
+        event_log << RED << "[Server::handle_c2] Error: FIFO file not created by c2_terminal.py" << RESET;
+        return;
+    }
+
+    int fifo_fd = open(C2_FIFO_PATH, O_RDONLY | O_NONBLOCK);
+    if (fifo_fd < 0) {
+        event_log << RED << "[Server::handle_c2] Error opening FIFO file: " << strerror(errno) << RESET;
+        return;
+    }
+
+    struct epoll_event fifo_event;
+    fifo_event.data.fd = fifo_fd;
+    fifo_event.events = EPOLLIN;
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, fifo_fd, &fifo_event) == -1) {
+        event_log << RED << "[Server::handle_c2] Error adding FIFO file to epoll: " << strerror(errno) << RESET;
+        return;
+    }
+
+    struct epoll_event events[2];
+    event_log << LOG_MUST << GREEN << "[Server::handle_c2] C2 terminal started" << RESET;
+    
+    while (!shutdown_flag_) {
+        int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
+        if (nfds == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            event_log << RED << "[Server::handle_c2] Error waiting for epoll event: " << strerror(errno) << RESET;
+            break;
+        }
+
+        for (int i=0; i < nfds; i++) {
+            if (events[i].data.fd == shutdown_event_fd_.fd) {
+                uint8_t u;
+                read(shutdown_event_fd_.fd, &u, sizeof(u));
+                break;
+            } else if (events[i].data.fd == fifo_fd) {
+                char buffer[256];
+                ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer) - 1);
+                if (bytes_read < 0) {
+                    event_log << RED << "[Server::handle_c2] Error reading from FIFO: " << strerror(errno) << RESET;
+                    break;
+                } else if (bytes_read == 0) {
+                    event_log << YELLOW << "[Server::handle_c2] C2 terminal closed" << RESET;
+                    break;
+                } else {
+                    buffer[bytes_read] = '\0';
+                    event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] C2 terminal message: " << buffer << RESET;
+                }
+            }
+        }
+    }
+c2_cleanup:
+    if (c2_child_pid > 0) {
+        kill(c2_child_pid, SIGTERM);
+        waitpid(c2_child_pid, nullptr, 0);
+    }
+    close(fifo_fd);
 }
 
 void Server::shutdown() { 
-    uint64_t u = 1;
+    uint8_t u = 1;
     write(shutdown_event_fd_.fd, &u, sizeof(u)); // Notify the accept thread to stop waiting
 
     shutdown_flag_ = true;
 
     log_context_->log_cv_.notify_one();
+
+    if (c2_child_pid > 0) {
+        kill(c2_child_pid, SIGTERM);
+        waitpid(c2_child_pid, nullptr, 0);
+    }
 
     for (auto& thread : client_threads_) {
         if (thread.joinable()) {

@@ -13,6 +13,10 @@
 #include <vector>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/wait.h>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
 #include "event_logger.hpp"
 #include "client_handler.hpp"
 #include "server_macros.hpp"
@@ -30,9 +34,8 @@ public:
 private: // Functions
     int accept_client();
     void handle_client(ClientHandler* client);
-    void handle_command();
+    void handle_c2();
     void log_event();
-    void log(std::stringstream& __event_log);
 private: // Variables
     uint32_t port_;
     std::string ip_;
@@ -51,11 +54,9 @@ private: // Variables
     std::mutex accept_mutex_;
     std::mutex client_mutex_;
     std::condition_variable accept_cv_;
-
-    //std::mutex log_mutex_;
-    //std::condition_variable log_cv_;
-    //std::queue<std::string> log_queue_;
     std::shared_ptr<LogContext> log_context_;
+
+    int c2_child_pid = -1;
 };
 
 #endif // SERVER_HPP

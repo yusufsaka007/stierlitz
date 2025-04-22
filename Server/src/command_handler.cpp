@@ -30,7 +30,7 @@ Command::Command(
 }
 
 CommandHandler::CommandHandler(
-    std::vector<std::unique_ptr<ClientHandler>>* __p_clients,
+    std::vector<ClientHandler*>* __p_clients,
     EventLog* __p_event_log,
     std::atomic<bool>* __p_shutdown_flag): p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag) {
     p_clients_ = __p_clients;
@@ -169,11 +169,6 @@ void CommandHandler::cleanup() {
 
 void CommandHandler::execute_command() {
     int rc = 0;
-    
-    std::getline(std::cin, cmd_);
-    if (cmd_.empty()) {
-        return;
-    }
 
     *p_event_log_ << LOG_MUST << MAGENTA << "[event_log_debug] command is " << cmd_ << RESET;
     std::cout << MAGENTA << "[cout_debug] command is " << cmd_ << RESET << std::endl;
