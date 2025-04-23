@@ -36,6 +36,7 @@ private: // Functions
     void handle_client(ClientHandler* client);
     void handle_c2();
     void log_event();
+    void cleanup_server();
 private: // Variables
     uint32_t port_;
     std::string ip_;

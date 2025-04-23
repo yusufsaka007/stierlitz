@@ -18,10 +18,7 @@ EventLog& EventLog::operator<<(const char* value) {
     if (std::string(value) == RESET || std::string(value) == RESET_NO_NEWLINE) {
         {
             log_stream_ << value;
-            //std::lock_guard<std::mutex> lock(*p_log_mutex_);
             std::lock_guard<std::mutex> lock(log_context_->log_mutex_);
-            // p_log_queue_->push(log_stream_.str());
-            // p_log_cv_->notify_one();
             log_context_->log_queue_.push(log_stream_.str());
             log_context_->log_cv_.notify_one();
         }
@@ -41,10 +38,7 @@ EventLog& EventLog::operator<<(const std::string& value) {
     if (value == RESET || value == RESET_NO_NEWLINE) {
         {
             log_stream_ << value;
-            //std::lock_guard<std::mutex> lock(*p_log_mutex_);
             std::lock_guard<std::mutex> lock(log_context_->log_mutex_);
-            //p_log_queue_->push(log_stream_.str());
-            //p_log_cv_->notify_one();
             log_context_->log_queue_.push(log_stream_.str());
             log_context_->log_cv_.notify_one();
         }

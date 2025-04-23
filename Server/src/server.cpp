@@ -79,7 +79,11 @@ int Server::init() {
     }
 
     shutdown_event_fd_.fd = eventfd(0, EFD_NONBLOCK);
-    
+    if (shutdown_event_fd_.fd == -1) {
+        std::cerr << RED << "[Server::init] Error creating shutdown_event_fd_: " << strerror(errno) << RESET << std::endl;
+        return -1;
+    }
+
     clients_.resize(max_connections_);
     for (int i=0;i<max_connections_;i++) {
         clients_[i] = nullptr;
@@ -101,6 +105,10 @@ void Server::start() {
     logger_thread.join();
     accept_thread.join();
     c2_thread.join();
+
+    if (!shutdown_flag_) {
+        shutdown();
+    }
 }
 
 int Server::accept_client() {
@@ -113,7 +121,7 @@ int Server::accept_client() {
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
     if (epoll_fd.fd == -1) {
-        std::cerr << RED << "[Server::accept_client] Error creating epoll instance: " << strerror(errno) << RESET;
+        event_log << RED << "[Server::accept_client] Error creating epoll instance: " << strerror(errno) << RESET;
         return -1;
     }
 
@@ -121,7 +129,7 @@ int Server::accept_client() {
     ev.data.fd = server_socket_;
     ev.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, server_socket_, &ev) == -1) {
-        std::cerr << RED << "[Server::accept_client] Error adding server socket to epoll: " << strerror(errno) << RESET;
+        event_log << RED << "[Server::accept_client] Error adding server socket to epoll: " << strerror(errno) << RESET;
         return -1;
     }
 
@@ -129,7 +137,7 @@ int Server::accept_client() {
     shutdown_event.data.fd = shutdown_event_fd_.fd;
     shutdown_event.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, shutdown_event_fd_.fd, &shutdown_event) == -1) {
-        std::cerr << RED << "[Server::accept_client] Error adding shutdown eventfd to epoll: " << strerror(errno) << RESET;
+        event_log << RED << "[Server::accept_client] Error adding shutdown eventfd to epoll: " << strerror(errno) << RESET;
         return -1;
     }
 
@@ -142,30 +150,27 @@ int Server::accept_client() {
         std::unique_lock<std::mutex> lock(accept_mutex_);
         accept_cv_.wait(lock, [this] {return client_count_ < max_connections_ || shutdown_flag_;});
         if (shutdown_flag_) {
-            std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+            event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
             return 0;
         }
 
-        //std::cout << GREEN << "[Server::accept_client] Waiting for client connection" << RESET;
         event_log << LOG_MUST << GREEN << "[Server::accept_client] Waiting for client connection" << RESET;
         
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
         if (nfds == -1) {
             if (errno == EINTR) {
-                std::cerr << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
                 return 0;
             } else {
-                std::cerr << RED << "[Server::accept_client] Error waiting for epoll event: " << strerror(errno) << RESET;
+                event_log << RED << "[Server::accept_client] Error waiting for epoll event: " << strerror(errno) << RESET;
                 return -1;
             }
         } 
         
         for (int i=0; i<nfds; i++) {
             if (events[i].data.fd == shutdown_event_fd_.fd) {
-                std::cout << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
-                //event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
-
-                uint8_t u;
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+                uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 return 0;
             }
@@ -173,7 +178,7 @@ int Server::accept_client() {
             if(events[i].data.fd == server_socket_) {
                 client_socket = accept(server_socket_, (struct sockaddr*) &client_addr, &addr_len);
                 if (client_socket < 0) {   
-                    std::cerr << RED << "[Server::accept_client] Error accepting client: " << strerror(errno) << RESET;
+                    event_log << RED << "[Server::accept_client] Error accepting client: " << strerror(errno) << RESET;
                     return -1;
                 }
                 {
@@ -182,7 +187,7 @@ int Server::accept_client() {
                     std::lock_guard<std::mutex> lock(client_mutex_);
                     for (int i = 0; i < max_connections_; i++) {
                         if (clients_[i] == nullptr) {
-                            std::cout << MAGENTA << "[Server::accept_client] Found free slot for client " << i << RESET;
+                            event_log << MAGENTA << "[Server::accept_client] Found free slot for client " << i << RESET;
                             //clients_[i] = std::make_shared<ClientHandler>();
                             client = new ClientHandler();
                             clients_[i] = client;
@@ -191,13 +196,13 @@ int Server::accept_client() {
                             clients_[client_index]->init_client(client_addr, client_socket, client_index);
                             client_count_++;
                             //event_log << GREEN << "[Server::accept_client] New connection from: " << clients_[i]->ip() << RESET;
-                            std::cout << GREEN << "[Server::accept_client] New connection from: " << clients_[client_index]->ip() << RESET;
+                            event_log << GREEN << "[Server::accept_client] New connection from: " << clients_[client_index]->ip() << RESET;
                             break;
                         }
                     }
                 }
                 if (client_index < 0){
-                    std::cerr << RED << "[Server::accept_client] No free slots for new client" << RESET;
+                    event_log << RED << "[Server::accept_client] No free slots for new client" << RESET;
                     close(client_socket);
                     return -1;
                 }
@@ -205,7 +210,7 @@ int Server::accept_client() {
                 try {
                     client_threads_.emplace_back(&Server::handle_client, this, clients_[client_index]);
                 } catch (const std::system_error& e) {
-                    std::cerr << RED << "[Server::accept_client] Error creating thread for client" << RESET;
+                    event_log << RED << "[Server::accept_client] Error creating thread for client" << RESET;
                     {
                         std::lock_guard<std::mutex> lock(client_mutex_);
                         clients_[i]->cleanup_client();
@@ -222,7 +227,6 @@ int Server::accept_client() {
 
 void Server::handle_client(ClientHandler* client) {
     // Receive data from the client
-    std::cout << MAGENTA << "Current thread ID:<index>: " << std::this_thread::get_id() << ":" << client->index() << RESET;
     char buffer[MAX_BUFFER_SIZE];
     int recv_rc;
     int send_rc;
@@ -232,27 +236,26 @@ void Server::handle_client(ClientHandler* client) {
         memset(buffer, 0, sizeof(buffer));
         recv_rc = recv_buf(client->socket(), buffer, sizeof(buffer), shutdown_flag_);
         if (recv_rc < 0) {
-            std::cerr << RED << "[Server::handle_client] Client " << client->index() << " failed: " << recv_rc << RESET;  
+            event_log << RED << "[Server::handle_client] Client " << client->index() << " failed: " << recv_rc << RESET;  
             break; // @todo find a better way to handle recv error
         } else if (recv_rc == PEER_DISCONNECTED_ERROR) {
-            std::cerr << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
+            event_log << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
             break; // @todo find a better way to handle client disconnection
         } else {
             // Test
-            //std::cout << GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;
             event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;
             send_rc = send_buf(client->socket(), buffer, recv_rc, shutdown_flag_);
             if (send_rc < 0) {
-                std::cerr << RED << "[Server::handle_client] Client " << client->index() << " failed: " << send_rc << RESET;
+                event_log << RED << "[Server::handle_client] Client " << client->index() << " failed: " << send_rc << RESET;
                 break; // @todo find a better way to handle send error
             } else if (send_rc == PEER_DISCONNECTED_ERROR) {
-                std::cerr << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
+                event_log << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
                 break; // @todo find a better way to handle client disconnection
             }
         }
     }
 
-    std::cout << YELLOW << "[Server::handle_client] Cleaning up client " << client->index() << RESET;
+    event_log << YELLOW << "[Server::handle_client] Cleaning up client " << client->index() << RESET;
     {
         std::lock_guard<std::mutex> lock(client_mutex_);
         clients_[client->index()] = nullptr;
@@ -347,7 +350,6 @@ void Server::handle_c2() {
 
     struct epoll_event events[2];
     event_log << LOG_MUST << GREEN << "[Server::handle_c2] C2 terminal started" << RESET;
-    
     while (!shutdown_flag_) {
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
         if (nfds == -1) {
@@ -360,21 +362,30 @@ void Server::handle_c2() {
 
         for (int i=0; i < nfds; i++) {
             if (events[i].data.fd == shutdown_event_fd_.fd) {
-                uint8_t u;
+                uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
-                break;
+                goto c2_cleanup;
             } else if (events[i].data.fd == fifo_fd) {
                 char buffer[256];
-                ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer) - 1);
+                ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer));
                 if (bytes_read < 0) {
                     event_log << RED << "[Server::handle_c2] Error reading from FIFO: " << strerror(errno) << RESET;
-                    break;
+                    goto c2_cleanup;
                 } else if (bytes_read == 0) {
                     event_log << YELLOW << "[Server::handle_c2] C2 terminal closed" << RESET;
-                    break;
+                    goto c2_cleanup;
                 } else {
+                    if (buffer[bytes_read - 1] == '\n') {
+                        bytes_read--;
+                    }
                     buffer[bytes_read] = '\0';
                     event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] C2 terminal message: " << buffer << RESET;
+                    
+                    if (strncmp(buffer, "exit", 4) == 0) {
+                        event_log << YELLOW << "[Server::handle_c2] C2 terminal exit command received" << RESET;
+                        shutdown_flag_ = true;
+                        goto c2_cleanup;
+                    }
                 }
             }
         }
@@ -385,26 +396,13 @@ c2_cleanup:
         waitpid(c2_child_pid, nullptr, 0);
     }
     close(fifo_fd);
+    if (shutdown_flag_) {
+        event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;
+        shutdown();
+    }
 }
 
-void Server::shutdown() { 
-    uint8_t u = 1;
-    write(shutdown_event_fd_.fd, &u, sizeof(u)); // Notify the accept thread to stop waiting
-
-    shutdown_flag_ = true;
-
-    log_context_->log_cv_.notify_one();
-
-    if (c2_child_pid > 0) {
-        kill(c2_child_pid, SIGTERM);
-        waitpid(c2_child_pid, nullptr, 0);
-    }
-
-    for (auto& thread : client_threads_) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
+void Server::cleanup_server() {
     for (int i = 0; i < max_connections_; i++) {
         if (clients_[i] != nullptr) {
             clients_[i]->cleanup_client();
@@ -415,4 +413,25 @@ void Server::shutdown() {
     if (server_socket_ != -1) {
         close(server_socket_);
     }
+}
+
+void Server::shutdown() { 
+    shutdown_flag_ = true;
+
+    uint64_t u = 1;
+    write(shutdown_event_fd_.fd, &u, sizeof(u));
+
+    {
+        std::lock_guard<std::mutex> lock(log_context_->log_mutex_);
+        log_context_->log_cv_.notify_one();
+    }
+    
+    for (auto& thread : client_threads_) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+
+    cleanup_server();
+    
 }

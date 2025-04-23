@@ -11,7 +11,6 @@ set(SERVER_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/Server/include)
 set(SERVER_SRC_DIR ${CMAKE_SOURCE_DIR}/Server/src)
 set(DATA_HANDLER_DIR ${CMAKE_SOURCE_DIR}/DataHandler)
 set(BIN_DIR ${CMAKE_SOURCE_DIR}/bin)
-set(NLOHMANN_JSON_DIR "/usr/local/include/nlohmann") # JSON library path
 
 set(C2_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/c2_terminal.py)
 set(C2_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_fifo)
@@ -33,4 +32,4 @@ target_compile_definitions(server PRIVATE SERVER
 )
 
 target_link_libraries(server PRIVATE DataHandlerServer)
-target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${DATA_HANDLER_DIR} ${NLOHMANN_JSON_DIR})
+target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${DATA_HANDLER_DIR})
