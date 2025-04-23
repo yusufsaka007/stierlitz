@@ -47,24 +47,34 @@ CommandHandler::CommandHandler(
         this,
         {}
     ));
-    // command_map_["select"] = Command("select", "Select a client to work with", {}, {INDEX_ARG});
-    // command_map_["kill"] = Command("kill", "Kill the selected client. kill -i/--index <client_id> or kill -a/--all for specific clients", {INDEX_ARG, ALL_ARG});
-    // command_map_["exit"] = Command("exit", "Shutdown the server. -k/--kill to kill all clients upon exit", {KILL_ARG});
-    // command_map_["list"] = Command("list", "List all clients", {});
-    // command_map_["info"] = Command("info", "Show information about a client. info -i/--index <client_id>", {}, {INDEX_ARG});
+    command_map_.emplace("test", Command(
+        "Test command. For specific command help <command> or <command> -h/--help",
+        &CommandHandler::test,
+        this,
+        {HELP_ARG},
+        {INDEX_ARG, ALL_ARG}
+    ));
+    command_map_.emplace("list", Command(
+        "List all clients",
+        &CommandHandler::list,
+        this,
+        {HELP_ARG}
+    ));
 }
 
 bool CommandHandler::command_exists(const std::string& __root_cmd) {
     return command_map_.find(__root_cmd) != command_map_.end();
 }
 
-bool CommandHandler::parse_arguments(const std::string& __root_cmd, const std::string& __args_str) {
+int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::string& __args_str) {
     // Break the input into individual arguments
     std::istringstream iss(__args_str);
     std::vector<std::string> args((std::istream_iterator<std::string>(iss)), std::istream_iterator<std::string>());
 
     std::unordered_map<int, std::any> temp_arg_map;
     std::vector<int> found_required_args;
+
+    Command& command = command_map_.at(__root_cmd);
 
     for (size_t i = 0; i < args.size(); i++) {
         const std::string& arg = args[i];
@@ -75,21 +85,21 @@ bool CommandHandler::parse_arguments(const std::string& __root_cmd, const std::s
 
         if (it == argument_list_.end()) {
             *p_event_log_ << LOG_MUST << RED << "Unknown argument: " << arg << RESET;
-            return false;
+            return -1;
         }
 
         int arg_num = it->arg_num_;
         int arg_type = it->arg_value_type_;
 
         // Track whether required arguments are found
-        if (std::find(command_map_.at(__root_cmd).required_.begin(), command_map_.at(__root_cmd).required_.end(), it->arg_num_) != command_map_.at(__root_cmd).required_.end()) {
+        if (std::find(command.required_.begin(), command.required_.end(), it->arg_num_) != command.required_.end()) {
             found_required_args.push_back(it->arg_num_);
         }
 
         if (arg_type != ARG_TYPE_SET) {
             if (i + 1 >= args.size()) {
                 *p_event_log_ << LOG_MUST << RED << "Missing value for argument: " << arg << RESET;
-                return false;
+                return -1;
             }
 
             const std::string& value = args[i+1];
@@ -100,7 +110,7 @@ bool CommandHandler::parse_arguments(const std::string& __root_cmd, const std::s
         
             if (is_next_arg_flag) {
                 *p_event_log_ << LOG_MUST << RED << "Expected value after argument: " << arg << ", but got another argument: " << value << RESET;
-                return false;
+                return -1;
             }
 
             try {
@@ -110,27 +120,50 @@ bool CommandHandler::parse_arguments(const std::string& __root_cmd, const std::s
                     temp_arg_map[arg_num] = value;
                 } else {
                     *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET;
-                    return false;
+                    return -1;
                 }
 
                 i++; // Skip the value since it's already processed
             } catch (const std::exception& e) {
                 *p_event_log_ << LOG_MUST << RED << "Invalid value for argument " << arg << ": " << e.what() << RESET;
-                return false;
+                return -1;
             }
         } else {
             temp_arg_map[it->arg_num_] = true;
         }    
     }
 
-    for (int required_arg : command_map_.at(__root_cmd).required_) {
+    if (temp_arg_map.find(HELP_ARG) != temp_arg_map.end()) {
+        *p_event_log_ << LOG_MUST << CYAN << __root_cmd << " " << command.description_ << RESET;
+        return HELP_ARG;
+    }
+
+    if (std::find(command.required_.begin(), command.required_.end(), INDEX_ARG) != command.required_.end() &&
+    std::find(command.required_.begin(), command.required_.end(), ALL_ARG) != command.required_.end()) {
+        bool index_found = temp_arg_map.find(INDEX_ARG) != temp_arg_map.end();
+        bool all_found = temp_arg_map.find(ALL_ARG) != temp_arg_map.end();
+
+        if (index_found && all_found) {
+            *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET;
+            return -1;
+        } 
+        if (!index_found && !all_found) {
+            *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET;
+            return -1;
+        }
+    }
+
+    for (int required_arg : command.required_) {
+        if (required_arg == INDEX_ARG || required_arg == ALL_ARG) {
+            continue; // Skip INDEX_ARG and ALL_ARG
+        }
         if (std::find(found_required_args.begin(), found_required_args.end(), required_arg) == found_required_args.end()) {
-            return false;
+            return -1;
         }
     }
 
     arg_map_ = std::move(temp_arg_map);
-    return true;
+    return 0;
 }
 
 int CommandHandler::parse_command(const std::string& __root_cmd) {
@@ -146,37 +179,88 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
     if (space_pos != std::string::npos) {
         args_str = cmd_.substr(space_pos + 1); // Extract everything after the first space
     }
-
-    if (!parse_arguments(__root_cmd, args_str)) {
-        *p_event_log_ << LOG_MUST << RED << "Invalid command usage " << __root_cmd << "\nhelp " << __root_cmd << " for usage" << RESET;
+    int rc = parse_arguments(__root_cmd, args_str);
+    if (rc < 0) {
+        *p_event_log_ << LOG_MUST << RED << "Invalid command usage! Type " << __root_cmd << "-h to see the usage" << RESET;
+        return -1;
+    } else if (rc == HELP_ARG) {
         return -1;
     }
 
     return 0;
 }
+void CommandHandler::send_client(uint8_t __command, int __client_index) {
+    if (__client_index < 0 || __client_index >= p_clients_->size()) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Invalid client index: " << __client_index << RESET;
+        return;
+    }
 
-void CommandHandler::help() {
-    *p_event_log_ << LOG_MUST << CYAN << "stierlitz Available commands:" << RESET;
-    for (const auto& [cmd, command] : command_map_) {
-        *p_event_log_ << LOG_MUST << CYAN << cmd << RESET << ": " << command.description_ << "\n";
+    if (p_clients_->at(__client_index) != nullptr && ClientHandler::is_client_up(p_clients_->at(__client_index)->socket()) == 0) {
+        int rc = send_command(p_clients_->at(__client_index)->socket(), __command);
+        if (rc < 0) {
+            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << __client_index << ": " << rc << RESET;
+        } else if (rc == PEER_DISCONNECTED_ERROR) {
+            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << __client_index << " disconnected" << RESET;
+        } else {
+            *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << __client_index << RESET;
+        }
+    } else {
+        *p_event_log_ << LOG_DEBUG << YELLOW << "[CommandHandler::send_client] Client " << __client_index << " is not available" << RESET;
     }
 }
 
-void CommandHandler::cleanup() {
-    cmd_.clear();
-    arg_map_.clear();
+void CommandHandler::send_client(uint8_t __command) {
+    for (int i=0; i<p_clients_->size(); i++) {
+        if (p_clients_->at(i) != nullptr && ClientHandler::is_client_up(p_clients_->at(i)->socket())) {
+            int rc = send_command(p_clients_->at(i)->socket(), __command);
+            if (rc < 0) {
+                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << i << ": " << rc << RESET;
+            } else if (rc == PEER_DISCONNECTED_ERROR) {
+                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << i << " disconnected" << RESET;
+            } else {
+                *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << i << RESET;
+            }
+        }
+    }
 }
 
-void CommandHandler::execute_command() {
+void CommandHandler::help() {
+    *p_event_log_ << LOG_MUST << CYAN << "\n\nstierlitz Available commands\n" << RESET;
+    for (const auto& [cmd, command] : command_map_) {
+        *p_event_log_ << LOG_MUST << CYAN << cmd << "   " << command.description_ << RESET;
+    }
+}
+
+void CommandHandler::test() {
+    *p_event_log_ << LOG_MUST << CYAN << "stierlitz Test command executed" << RESET;
+
+    if(arg_map_.find(INDEX_ARG) != arg_map_.end()) {
+        send_client(TEST, std::any_cast<int>(arg_map_[INDEX_ARG]));
+    }
+    if(arg_map_.find(ALL_ARG) != arg_map_.end()) {
+        send_client(TEST);
+    }
+}
+
+void CommandHandler::list() {
+    *p_event_log_ << LOG_MUST << CYAN;
+    for (int i=0; i<p_clients_->size(); i++) {
+        if (p_clients_->at(i) != nullptr) {
+            *p_event_log_ << "\n==Client " << i << "==    " << p_clients_->at(i)->ip();
+        }
+    }
+    *p_event_log_ << RESET;
+}
+
+void CommandHandler::execute_command(const char* __cmd, int __len) {
     int rc = 0;
 
-    *p_event_log_ << LOG_MUST << MAGENTA << "[event_log_debug] command is " << cmd_ << RESET;
-    std::cout << MAGENTA << "[cout_debug] command is " << cmd_ << RESET << std::endl;
-
+    cmd_ = std::string(__cmd, __len);
     std::string root_cmd = cmd_.substr(0, cmd_.find(' '));
 
     rc = parse_command(root_cmd);
     if (rc < 0) {
+        cleanup();
         return;
     }
 
@@ -187,3 +271,7 @@ void CommandHandler::execute_command() {
     cleanup();
 }
 
+void CommandHandler::cleanup() {
+    cmd_.clear();
+    arg_map_.clear();
+}

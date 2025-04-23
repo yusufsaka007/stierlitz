@@ -5,6 +5,7 @@
 #define DEFAULT_IP "0.0.0.0"
 #define DEFAULT_MAX_CONNECTIONS 5
 #define DEFAULT_VERBOSITY 4
+
 #define MAX_BUFFER_SIZE 2048
 
 #define RESET  "\033[0m\n"

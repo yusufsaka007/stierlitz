@@ -63,6 +63,16 @@ int recv_buf(int __fd, char* __buf, int __len, const std::atomic<bool>& __shutdo
 
 }
 
+int send_command(int __fd, uint8_t __command) {
+    ssize_t bytes_sent = send(__fd, &__command, sizeof(__command),0);
+    if (bytes_sent < 0) {
+        return SEND_ERROR;
+    } else if (bytes_sent == 0) {
+        return PEER_DISCONNECTED_ERROR; // Connection closed
+    }
+    return bytes_sent;
+}
+
 int send_buf(int __fd, const char* __buf, int __len, const std::atomic<bool>& __shutdown_flag) {
     ssize_t bytes_sent;
     ssize_t total_bytes = 0;

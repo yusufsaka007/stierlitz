@@ -31,7 +31,15 @@
 #define ARG_TYPE_STRING 0x1B
 #define ARG_TYPE_SET 0x1C
 
+#define MAX_COMMAND_LEN 256
+
 class CommandHandler;
+
+// If command needs to be send to the client
+enum NumericalClientCommand {
+    TEST = 0b00000001,
+    KILL = 0b00000010
+};
 
 struct Argument {
     int arg_num_;
@@ -68,15 +76,18 @@ public:
         EventLog* __p_event_log,
         std::atomic<bool>* __p_shutdown_flag
     );
-    void execute_command();
+    void execute_command(const char* __cmd, int __len);
 private:
     int parse_command(const std::string& __root_cmd);
     bool command_exists(const std::string& __root_cmd);
-    bool parse_arguments(const std::string& __root_cmd, const std::string& __args_str);
+    int parse_arguments(const std::string& __root_cmd, const std::string& __args_str);
     
+    void test();
     void help();
-    
-    //int send_command();
+    void list();
+
+    void send_client(uint8_t __command, int __client_index);
+    void send_client(uint8_t __command);
     void cleanup();
 private:
     std::vector<ClientHandler*>* p_clients_;

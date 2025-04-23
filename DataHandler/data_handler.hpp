@@ -28,6 +28,7 @@ struct ScopedEpollFD {
  */
 int recv_buf(int __fd, char* __buf, int __len, const std::atomic<bool>& __shutdown_flag);
 int send_buf(int __fd, const char* __buf, int __len, const std::atomic<bool>& __shutdown_flag);
+int send_command(int __fd, uint8_t __command);
 #endif // SERVER
 
 #endif // DATA_HANDLER_HPP
