@@ -243,14 +243,10 @@ void Server::handle_client(ClientHandler* client) {
             break; // @todo find a better way to handle client disconnection
         } else {
             // Test
-            event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;
-            send_rc = send_buf(client->socket(), buffer, recv_rc, shutdown_flag_);
-            if (send_rc < 0) {
-                event_log << RED << "[Server::handle_client] Client " << client->index() << " failed: " << send_rc << RESET;
-                break; // @todo find a better way to handle send error
-            } else if (send_rc == PEER_DISCONNECTED_ERROR) {
-                event_log << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
-                break; // @todo find a better way to handle client disconnection
+            if (strncmp(buffer, "$xt", 3) == 0) {
+                event_log << CYAN << buffer + 4 << RESET_C2_FIFO;
+            } else {
+                event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;                
             }
         }
     }
@@ -308,7 +304,7 @@ void Server::handle_c2() {
     c2_child_pid = pid;
 
     EventLog event_log(log_context_);
-    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &user_verbosity_);
     ScopedEpollFD epoll_fd;
     int rc = 0;
     epoll_fd.fd = epoll_create1(0);
@@ -327,7 +323,7 @@ void Server::handle_c2() {
 
     // Wait for c2_terminal.py to create the fifo
     int tries = 0;
-    while(!std::filesystem::exists(C2_FIFO_PATH) && tries++ < 20) {
+    while((!std::filesystem::exists(C2_IN_FIFO_PATH))  && tries++ < 20) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -336,16 +332,17 @@ void Server::handle_c2() {
         return;
     }
 
-    int fifo_fd = open(C2_FIFO_PATH, O_RDONLY | O_NONBLOCK);
-    if (fifo_fd < 0) {
-        event_log << RED << "[Server::handle_c2] Error opening FIFO file: " << strerror(errno) << RESET;
+    rc = c2_fifo_.init();
+    if (rc < 0) {
+        event_log << RED << "[Server::handle_c2] Error initializing FIFO file: " << strerror(errno) << RESET;
         return;
-    }
+    } 
+    log_context_->p_c2_fifo_ = &c2_fifo_.fd_out;
 
     struct epoll_event fifo_event;
-    fifo_event.data.fd = fifo_fd;
+    fifo_event.data.fd = c2_fifo_.fd_in;
     fifo_event.events = EPOLLIN;
-    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, fifo_fd, &fifo_event) == -1) {
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, c2_fifo_.fd_in, &fifo_event) == -1) {
         event_log << RED << "[Server::handle_c2] Error adding FIFO file to epoll: " << strerror(errno) << RESET;
         return;
     }
@@ -367,9 +364,9 @@ void Server::handle_c2() {
                 uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 goto c2_cleanup;
-            } else if (events[i].data.fd == fifo_fd) {
-                char buffer[MAX_COMMAND_LEN + 1];
-                ssize_t bytes_read = read(fifo_fd, buffer, MAX_COMMAND_LEN + 1);
+            } else if (events[i].data.fd == c2_fifo_.fd_in) {
+                char cmd[MAX_COMMAND_LEN + 1];
+                ssize_t bytes_read = read(c2_fifo_.fd_in, cmd, MAX_COMMAND_LEN + 1);
                 if (bytes_read < 0) {
                     event_log << RED << "[Server::handle_c2] Error reading from FIFO: " << strerror(errno) << RESET;
                     goto c2_cleanup;
@@ -382,19 +379,19 @@ void Server::handle_c2() {
                         continue;
                     }
 
-                    if (buffer[bytes_read - 1] == '\n' || buffer[bytes_read - 1] == '\r') {
+                    if (cmd[bytes_read - 1] == '\n' || cmd[bytes_read - 1] == '\r') {
                         bytes_read--;
                     }
-                    buffer[bytes_read] = '\0';
-                    event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] C2 terminal message: " << buffer << RESET;
+                    cmd[bytes_read] = '\0';
+                    event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] C2 terminal message: " << cmd << RESET;
                     
-                    if (strncmp(buffer, "exit", 4) == 0) {
+                    if (strncmp(cmd, "exit", 4) == 0) {
                         event_log << YELLOW << "[Server::handle_c2] C2 terminal exit command received" << RESET;
                         shutdown_flag_ = true;
                         goto c2_cleanup;
                     }
 
-                    command_handler.execute_command(buffer, bytes_read);                    
+                    command_handler.execute_command(cmd, bytes_read);                    
                 }
             }
         }
@@ -404,7 +401,6 @@ c2_cleanup:
         kill(c2_child_pid, SIGTERM);
         waitpid(c2_child_pid, nullptr, 0);
     }
-    close(fifo_fd);
     if (shutdown_flag_) {
         event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;
         shutdown();

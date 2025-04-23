@@ -17,6 +17,10 @@
 #include <sys/time.h>
 #include <future>
 #include <memory>
+#include <fcntl.h>
+#include <filesystem>
+#include <chrono>
+#include <thread>
 #include "event_logger.hpp"
 #include "server_macros.hpp"
 #include "client_handler.hpp"
@@ -26,6 +30,7 @@
 #define ALL_ARG 2
 #define HELP_ARG 3
 #define KILL_ARG 4
+#define VERBOSITY_ARG 5
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
@@ -34,6 +39,15 @@
 #define MAX_COMMAND_LEN 256
 
 class CommandHandler;
+
+class C2FIFO {
+public:
+    C2FIFO();
+    ~C2FIFO();
+    int init();
+    int fd_in;
+    int fd_out;
+};    
 
 // If command needs to be send to the client
 enum NumericalClientCommand {
@@ -74,9 +88,10 @@ public:
     CommandHandler(
         std::vector<ClientHandler*>* __p_clients, 
         EventLog* __p_event_log,
-        std::atomic<bool>* __p_shutdown_flag
+        std::atomic<bool>* __p_shutdown_flag,
+        int* __p_user_verbosity
     );
-    void execute_command(const char* __cmd, int __len);
+    void execute_command(char* __cmd, int __len);
 private:
     int parse_command(const std::string& __root_cmd);
     bool command_exists(const std::string& __root_cmd);
@@ -85,6 +100,8 @@ private:
     void test();
     void help();
     void list();
+    void set_verbosity();
+    void show_verbosity();
 
     void send_client(uint8_t __command, int __client_index);
     void send_client(uint8_t __command);
@@ -92,6 +109,7 @@ private:
 private:
     std::vector<ClientHandler*>* p_clients_;
     EventLog* p_event_log_;
+    int* p_user_verbosity_;
     std::atomic<bool>* p_shutdown_flag_;
     std::unordered_map<std::string,Command> command_map_;
     std::vector<Argument> argument_list_;

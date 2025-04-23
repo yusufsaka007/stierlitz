@@ -48,6 +48,7 @@ private: // Variables
     struct sockaddr_in server_addr_;
     int server_socket_;
     ScopedEpollFD shutdown_event_fd_;
+    C2FIFO c2_fifo_;
 
     std::vector<ClientHandler*> clients_;
     int client_count_ = 0;

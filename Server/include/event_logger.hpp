@@ -6,10 +6,12 @@
 #include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <unistd.h>
+#include <cstring>
 #include "server_macros.hpp"
 
 enum LogLevel {
-    LOG_NONE = 5,
+    LOG_NONE = 0,
     LOG_DEBUG = 4,
     LOG_MINOR_EVENTS = 3,
     LOG_CRITICAL_EVENTS = 2,
@@ -21,7 +23,8 @@ struct LogContext {
     std::mutex log_mutex_;
     std::condition_variable log_cv_;
     std::queue<std::string> log_queue_;
-    int* p_user_verbosity_;
+    int* p_user_verbosity_ = nullptr;
+    int* p_c2_fifo_ = nullptr;
 };
 
 class EventLog {
@@ -37,6 +40,8 @@ public:
     EventLog& operator<<(const char* value);
     EventLog& operator<<(const std::string& value);
     EventLog& operator<<(LogLevel level);
+    void reset();
+    void c2_fifo_error();
 private:
     int log_verbosity_ = 0; // By default printed
     std::stringstream log_stream_;

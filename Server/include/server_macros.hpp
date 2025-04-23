@@ -8,6 +8,7 @@
 
 #define MAX_BUFFER_SIZE 2048
 
+#define RESET_C2_FIFO "\n[_end_]\033[0m\n"
 #define RESET  "\033[0m\n"
 #define RESET_NO_NEWLINE "\033[0m"
 #define RED "\033[31m[-] "

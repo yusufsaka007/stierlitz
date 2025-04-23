@@ -13,7 +13,8 @@ set(DATA_HANDLER_DIR ${CMAKE_SOURCE_DIR}/DataHandler)
 set(BIN_DIR ${CMAKE_SOURCE_DIR}/bin)
 
 set(C2_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/c2_terminal.py)
-set(C2_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_fifo)
+set(C2_IN_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_in_fifo)
+set(C2_OUT_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_out_fifo)
 
 # Output directory for binaries
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DIR})
@@ -28,7 +29,8 @@ file(GLOB_RECURSE SERVER_SRC_FILES ${SERVER_SRC_DIR}/*.cpp)
 add_executable(server ${SERVER_SRC_FILES})
 target_compile_definitions(server PRIVATE SERVER
     C2_SCRIPT_PATH="${C2_SCRIPT_PATH}"
-    C2_FIFO_PATH="${C2_FIFO_PATH}"
+    C2_IN_FIFO_PATH="${C2_IN_FIFO_PATH}"
+    C2_OUT_FIFO_PATH="${C2_OUT_FIFO_PATH}"
 )
 
 target_link_libraries(server PRIVATE DataHandlerServer)
