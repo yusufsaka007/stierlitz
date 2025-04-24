@@ -26,9 +26,9 @@ EventLog& EventLog::operator<<(const char* value) {
         }
         reset();
     } else if(std::string(value) == RESET_C2_FIFO) {
-        std::string log_message = "Hello world"; //log_stream_.str();
-        std::cout << MAGENTA << "[EventLog] Writing to FIFO: " << log_message << RESET;
-        if (*log_context_->p_c2_fifo_ >= 0) { // Ensure FIFO is valid
+        log_stream_ << value;
+        std::string log_message = log_stream_.str();
+        if (*log_context_->p_c2_fifo_ >= 0) {
             ssize_t bytes_written = write(*log_context_->p_c2_fifo_, log_message.c_str(), log_message.size());
             if (bytes_written < 0) {
                 c2_fifo_error();
@@ -59,8 +59,9 @@ EventLog& EventLog::operator<<(const std::string& value) {
         }
         reset();
     } else if(value == RESET_C2_FIFO) {
+        log_stream_ << value;
         std::string log_message = log_stream_.str();
-        if (*log_context_->p_c2_fifo_ >= 0) { // Ensure FIFO is valid
+        if (*log_context_->p_c2_fifo_ >= 0) {
             ssize_t bytes_written = write(*log_context_->p_c2_fifo_, log_message.c_str(), log_message.size());
             if (bytes_written < 0) {
                 c2_fifo_error();

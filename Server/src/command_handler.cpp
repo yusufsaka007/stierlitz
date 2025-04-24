@@ -130,7 +130,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
         });
 
         if (it == argument_list_.end()) {
-            *p_event_log_ << LOG_MUST << RED << "Unknown argument: " << arg << RESET_C2_FIFO;
+            *p_event_log_ << LOG_MUST << RED << "Unknown argument: " << arg << RESET;
             return -1;
         }
 
@@ -144,7 +144,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
 
         if (arg_type != ARG_TYPE_SET) {
             if (i + 1 >= args.size()) {
-                *p_event_log_ << LOG_MUST << RED << "Missing value for argument: " << arg << RESET_C2_FIFO;
+                *p_event_log_ << LOG_MUST << RED << "Missing value for argument: " << arg << RESET;
                 return -1;
             }
 
@@ -155,7 +155,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
             });
         
             if (is_next_arg_flag) {
-                *p_event_log_ << LOG_MUST << RED << "Expected value after argument: " << arg << ", but got another argument: " << value << RESET_C2_FIFO;
+                *p_event_log_ << LOG_MUST << RED << "Expected value after argument: " << arg << ", but got another argument: " << value << RESET;
                 return -1;
             }
 
@@ -165,13 +165,13 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
                 } else if (arg_type == ARG_TYPE_STRING) {
                     temp_arg_map[arg_num] = value;
                 } else {
-                    *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET_C2_FIFO;
+                    *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET;
                     return -1;
                 }
 
                 i++; // Skip the value since it's already processed
             } catch (const std::exception& e) {
-                *p_event_log_ << LOG_MUST << RED << "Invalid value for argument " << arg << ": " << e.what() << RESET_C2_FIFO;
+                *p_event_log_ << LOG_MUST << RED << "Invalid value for argument " << arg << ": " << e.what() << RESET;
                 return -1;
             }
         } else {
@@ -180,7 +180,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
     }
 
     if (temp_arg_map.find(HELP_ARG) != temp_arg_map.end()) {
-        *p_event_log_ << LOG_MUST << CYAN << __root_cmd << " " << command.description_ << RESET_C2_FIFO;
+        *p_event_log_ << LOG_MUST << CYAN << __root_cmd << " " << command.description_ << RESET;
         return HELP_ARG;
     }
 
@@ -190,11 +190,11 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
         bool all_found = temp_arg_map.find(ALL_ARG) != temp_arg_map.end();
 
         if (index_found && all_found) {
-            *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET_C2_FIFO;
+            *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET;
             return -1;
         } 
         if (!index_found && !all_found) {
-            *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET_C2_FIFO;
+            *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET;
             return -1;
         }
     }
@@ -216,7 +216,7 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
     
 
     if (!command_exists(__root_cmd)) {
-        *p_event_log_ << LOG_MUST << RED << "Command not found: " << __root_cmd << ". Type help to see all the available commands" << RESET_C2_FIFO;
+        *p_event_log_ << LOG_MUST << RED << "Command not found: " << __root_cmd << ". Type help to see all the available commands" << RESET;
         return -1;
     }
 
@@ -227,7 +227,7 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
     }
     int rc = parse_arguments(__root_cmd, args_str);
     if (rc < 0) {
-        *p_event_log_ << LOG_MUST << RED << "Invalid command usage! Type " << __root_cmd << "-h to see the usage" << RESET_C2_FIFO;
+        *p_event_log_ << LOG_MUST << RED << "Invalid command usage! Type " << __root_cmd << "-h to see the usage" << RESET;
         return -1;
     } else if (rc == HELP_ARG) {
         return -1;
@@ -237,21 +237,21 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
 }
 void CommandHandler::send_client(uint8_t __command, int __client_index) {
     if (__client_index < 0 || __client_index >= p_clients_->size()) {
-        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Invalid client index: " << __client_index << RESET_C2_FIFO;
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Invalid client index: " << __client_index << RESET;
         return;
     }
 
     if (p_clients_->at(__client_index) != nullptr && ClientHandler::is_client_up(p_clients_->at(__client_index)->socket()) == 0) {
         int rc = send_command(p_clients_->at(__client_index)->socket(), __command);
         if (rc < 0) {
-            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << __client_index << ": " << rc << RESET_C2_FIFO;
+            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << __client_index << ": " << rc << RESET;
         } else if (rc == PEER_DISCONNECTED_ERROR) {
-            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << __client_index << " disconnected" << RESET_C2_FIFO;
+            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << __client_index << " disconnected" << RESET;
         } else {
-            *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << __client_index << RESET_C2_FIFO;
+            *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << __client_index << RESET;
         }
     } else {
-        *p_event_log_ << LOG_DEBUG << YELLOW << "[CommandHandler::send_client] Client " << __client_index << " is not available" << RESET_C2_FIFO;
+        *p_event_log_ << LOG_DEBUG << YELLOW << "[CommandHandler::send_client] Client " << __client_index << " is not available" << RESET;
     }
 }
 
@@ -260,21 +260,22 @@ void CommandHandler::send_client(uint8_t __command) {
         if (p_clients_->at(i) != nullptr && ClientHandler::is_client_up(p_clients_->at(i)->socket())) {
             int rc = send_command(p_clients_->at(i)->socket(), __command);
             if (rc < 0) {
-                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << i << ": " << rc << RESET_C2_FIFO;
+                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << i << ": " << rc << RESET;
             } else if (rc == PEER_DISCONNECTED_ERROR) {
-                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << i << " disconnected" << RESET_C2_FIFO;
+                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << i << " disconnected" << RESET;
             } else {
-                *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << i << RESET_C2_FIFO;
+                *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << i << RESET;
             }
         }
     }
 }
 
 void CommandHandler::help() {
-    *p_event_log_ << LOG_MUST << CYAN << "\n\nstierlitz Available commands\n" << RESET_C2_FIFO;
+    *p_event_log_ << LOG_MUST << CYAN << "\nstierlitz Available commands\n";
     for (const auto& [cmd, command] : command_map_) {
-        *p_event_log_ << LOG_MUST << CYAN << cmd << "   " << command.description_ << RESET_C2_FIFO;
+        *p_event_log_ << LOG_MUST << CYAN << cmd << "   " << command.description_ << "\n";
     }
+    *p_event_log_ << RESET_C2_FIFO;
 }
 
 void CommandHandler::test() {
@@ -289,7 +290,7 @@ void CommandHandler::test() {
 }
 
 void CommandHandler::list() {
-    *p_event_log_ << LOG_MUST << CYAN;
+    *p_event_log_ << LOG_MUST << CYAN << "[Available Clients]";
     for (int i=0; i<p_clients_->size(); i++) {
         if (p_clients_->at(i) != nullptr) {
             *p_event_log_ << "\n==Client " << i << "==    " << p_clients_->at(i)->ip();

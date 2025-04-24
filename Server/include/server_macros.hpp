@@ -8,7 +8,7 @@
 
 #define MAX_BUFFER_SIZE 2048
 
-#define RESET_C2_FIFO "\n[_end_]\033[0m\n"
+#define RESET_C2_FIFO "\n[__end__]\033[0m\n"
 #define RESET  "\033[0m\n"
 #define RESET_NO_NEWLINE "\033[0m"
 #define RED "\033[31m[-] "
@@ -17,5 +17,7 @@
 #define BLUE "\033[34m"
 #define MAGENTA "\033[35m"
 #define CYAN "\033[36m"
+
+#define OUT_KEY "$^_out"
 
 #endif // MACROS_HPP
