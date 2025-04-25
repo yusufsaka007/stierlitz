@@ -26,7 +26,7 @@
 class Server {
 public:
     Server();
-    Server(const std::string& __ip, const uint32_t __port, const uint8_t __max_connections);
+    Server(const std::string& __ip, const int __port, const int __max_connections);
     ~Server();
     int init();
     void start();
@@ -58,7 +58,7 @@ private: // Variables
     std::condition_variable accept_cv_;
     std::shared_ptr<LogContext> log_context_;
 
-    int c2_child_pid = -1;
+    //std::unordered_map<int, std::vector<std::thread>> spy_tunnels_;
 };
 
 #endif // SERVER_HPP

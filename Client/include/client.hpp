@@ -1,0 +1,37 @@
+#ifndef CLIENT_HPP
+#define CLIENT_HPP
+
+#include <cstdio> // for printf, later will be removed
+#include <cstring>
+#include <cstdlib>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
+#include "client_macros.hpp"
+
+
+// g++ client.cpp -o client -Os -s
+// strip client
+
+enum Command {
+    TEST = 0b00000001,
+    KILL = 0b00000010
+};
+
+class Client {
+public:
+    Client(const char* __ip, const int __port);
+    int init();
+    void start();
+    void shutdown();
+private:
+    char ip_[MAX_IP_LEN];
+    int port_;
+    int socket_;
+    bool shutdown_flag_ = false;
+    struct sockaddr_in server_addr_;
+};
+
+#endif // CLIENT_HPP
