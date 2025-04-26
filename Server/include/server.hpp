@@ -57,8 +57,6 @@ private: // Variables
     std::mutex client_mutex_;
     std::condition_variable accept_cv_;
     std::shared_ptr<LogContext> log_context_;
-
-    //std::unordered_map<int, std::vector<std::thread>> spy_tunnels_;
 };
 
 #endif // SERVER_HPP

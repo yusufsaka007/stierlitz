@@ -9,16 +9,12 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
+#include "common.hpp"
 #include "client_macros.hpp"
 
 
 // g++ client.cpp -o client -Os -s
 // strip client
-
-enum Command {
-    TEST = 0b00000001,
-    KILL = 0b00000010
-};
 
 class Client {
 public:
@@ -26,11 +22,13 @@ public:
     int init();
     void start();
     void shutdown();
+    void send_out(Comm __comm);
 private:
     char ip_[MAX_IP_LEN];
     int port_;
     int socket_;
     bool shutdown_flag_ = false;
+    bool retry_flag_ = false;
     struct sockaddr_in server_addr_;
 };
 

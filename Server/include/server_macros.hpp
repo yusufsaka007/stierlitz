@@ -18,7 +18,4 @@
 #define MAGENTA "\033[35m"
 #define CYAN "\033[36m"
 
-#define OUT_KEY "$^_out"
-const int OUT_KEY_SIZE = sizeof(OUT_KEY) - 1;
-
 #endif // MACROS_HPP

