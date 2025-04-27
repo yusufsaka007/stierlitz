@@ -26,7 +26,7 @@
 class Server {
 public:
     Server();
-    Server(const std::string& __ip, const int __port, const int __max_connections);
+    Server(const std::string& __ip, const uint __port, const int __max_connections);
     ~Server();
     int init();
     void start();
@@ -38,7 +38,7 @@ private: // Functions
     void log_event();
     void cleanup_server();
 private: // Variables
-    uint32_t port_;
+    uint port_;
     std::string ip_;
     uint8_t max_connections_;
     int user_verbosity_;

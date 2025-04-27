@@ -22,7 +22,7 @@ public:
     int init();
     void start();
     void shutdown();
-    void send_out(Comm __comm);
+    void send_out(Status __status);
 private:
     char ip_[MAX_IP_LEN];
     int port_;

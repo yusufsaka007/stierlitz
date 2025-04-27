@@ -12,7 +12,7 @@ Server::Server() {
     max_connections_ = DEFAULT_MAX_CONNECTIONS;
     user_verbosity_ = DEFAULT_VERBOSITY;
 }
-Server::Server(const std::string& __ip, const int __port, const int __max_connections) {
+Server::Server(const std::string& __ip, const uint __port, const int __max_connections) {
     port_ = __port;
     ip_ = __ip;
     max_connections_ = __max_connections;
@@ -246,7 +246,7 @@ void Server::handle_client(ClientHandler* client) {
             break;
         } else {
             if (memcmp(buffer, OUT_KEY, OUT_KEY_LEN) == 0) {
-                Comm status = static_cast<uint16_t>(
+                Status status = static_cast<uint16_t>(
                     static_cast<uint8_t>(buffer[OUT_KEY_LEN]) |
                     (static_cast<uint8_t>(buffer[OUT_KEY_LEN + 1]) << 8)
                 );
@@ -314,7 +314,7 @@ void Server::handle_c2() {
 
     // Parent process
     EventLog event_log(log_context_);
-    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &user_verbosity_);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, &port_, &user_verbosity_);
     ScopedEpollFD epoll_fd;
     int rc = 0;
     epoll_fd.fd = epoll_create1(0);
