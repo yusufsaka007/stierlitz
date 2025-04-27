@@ -1,0 +1,34 @@
+! Base settings
+stierlitz_keylogger*foreground: #F8F8F2
+stierlitz_c2*background: [30]#0D0221
+stierlitz_keylogger*font: xft:JetBrainsMono Nerd Font:pixelsize=14
+stierlitz_keylogger*cursorColor: #FF00FF
+stierlitz_keylogger*saveLines: 10000
+stierlitz_keylogger*inheritPixmap: false
+
+! Color palette (Synthwave/Neon)
+stierlitz_keylogger*color0:  #0D0221
+stierlitz_keylogger*color1:  #FF005F
+stierlitz_keylogger*color2:  #00FF9C
+stierlitz_keylogger*color3:  #FF9C00
+stierlitz_keylogger*color4:  #00CFFF
+stierlitz_keylogger*color5:  #9C00FF
+stierlitz_keylogger*color6:  #00FFF7
+stierlitz_keylogger*color7:  #FFFFFF
+stierlitz_keylogger*color8:  #555555
+stierlitz_keylogger*color9:  #FF4081
+stierlitz_keylogger*color10: #00FFB7
+stierlitz_keylogger*color11: #FFD93D
+stierlitz_keylogger*color12: #2BC5F0
+stierlitz_keylogger*color13: #C74DED
+stierlitz_keylogger*color14: #00FFF0
+stierlitz_keylogger*color15: #FFFFFF
+
+! Scrollbar off for clean look
+stierlitz_keylogger*scrollBar: false
+
+! Blinking cursor
+stierlitz_keylogger*cursorBlink: true
+
+! Bold is bright
+stierlitz_keylogger*boldMode: true

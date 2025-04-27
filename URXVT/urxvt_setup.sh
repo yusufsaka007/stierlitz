@@ -7,6 +7,12 @@ XRES="$HOME/.Xresources"
 XRES_TEMP=$(mktemp)
 cp "$XRES" "$XRES_TEMP"
 
+if [ ! -f "$XRES" ]; then
+    touch "$XRES"
+    echo "! Created empty .Xresources" >> "$XRES"
+    echo "Created $XRES"
+fi
+
 remove_profile_block() {
     local profile_marker="$1"
     awk -v marker="$profile_marker" '

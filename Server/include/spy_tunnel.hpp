@@ -1,18 +1,7 @@
 #ifndef SPY_TUNNEL_HPP
 #define SPY_TUNNEL_HPP
 
-#include <iostream>
-#include <string>
-#include <atomic>
-#include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <thread>
-#include <signal.h>
-#include <sys/wait.h>
-#include "server_macros.hpp"
+#include "include_tunnel.hpp"
 
 class SpyTunnel {
 public:
@@ -21,16 +10,21 @@ public:
         uint* __p_port,
         int __client_index,
         std::atomic<bool>* __p_shutdown_flag,
-        int __connection_type
+        int __connection_type,
+        std::shared_ptr<LogContext> __log_context,
+        int __shutdown_event_fd
     );
 
     int run();
     ~SpyTunnel() = default;
     void shutdown() {
     }
+private:
+    void write_error(int fifo, const std::string& __msg);
 protected:
     virtual void spawn_window();
-    virtual void handle_tunnel(int __write_pipe);
+    virtual void handle_tunnel(int __socket, int __fifo_fd);
+    virtual const char* get_fifo_path();
 
     std::string* p_ip_;
     uint* p_port_;
@@ -40,6 +34,9 @@ protected:
     struct sockaddr_in server_addr_;
     int connection_type_;
     std::thread tunnel_thread_;
+    std::shared_ptr<LogContext> log_context_;
+    int shutdown_event_fd_;
+    EventLog event_log_;
 };
 
 #endif // SPY_TUNNEL_HPP

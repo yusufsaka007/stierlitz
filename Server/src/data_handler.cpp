@@ -1,14 +1,5 @@
 #include "data_handler.hpp"
 
-ScopedEpollFD::ScopedEpollFD(){
-    fd = -1;
-}
-ScopedEpollFD::~ScopedEpollFD() {
-    if (fd >= 0) {
-        close(fd);
-    }
-}
-
 int recv_buf(int __fd, char* __buf, int __len, const std::atomic<bool>& __shutdown_flag) {
     int rc = 0;
     ScopedEpollFD epoll_fd;
