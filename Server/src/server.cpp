@@ -314,7 +314,7 @@ void Server::handle_c2() {
 
     // Parent process
     EventLog event_log(log_context_);
-    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, &port_, &user_verbosity_);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, &port_, &user_verbosity_, shutdown_event_fd_.fd);
     ScopedEpollFD epoll_fd;
     int rc = 0;
     epoll_fd.fd = epoll_create1(0);

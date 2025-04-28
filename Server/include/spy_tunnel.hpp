@@ -11,17 +11,17 @@ public:
         int __client_index,
         std::atomic<bool>* __p_shutdown_flag,
         int __connection_type,
-        std::shared_ptr<LogContext> __log_context,
-        int __shutdown_event_fd
+        int __shutdown_event_fd,
+        std::vector<int>* __p_tunnel_shutdown_fds
     );
 
     int run();
     ~SpyTunnel() = default;
     void shutdown() {
     }
-private:
-    void write_error(int fifo, const std::string& __msg);
+
 protected:
+    void write_error(int fifo, const std::string& __msg);
     virtual void spawn_window();
     virtual void handle_tunnel(int __socket, int __fifo_fd);
     virtual const char* get_fifo_path();
@@ -34,9 +34,8 @@ protected:
     struct sockaddr_in server_addr_;
     int connection_type_;
     std::thread tunnel_thread_;
-    std::shared_ptr<LogContext> log_context_;
     int shutdown_event_fd_;
-    EventLog event_log_;
+    std::vector<int>* p_tunnel_shutdown_fds_;
 };
 
 #endif // SPY_TUNNEL_HPP

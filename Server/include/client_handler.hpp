@@ -17,6 +17,8 @@ public:
     int socket() const;
     std::string ip() const;
     int index() const;
+    int set_tunnel(uint8_t __tunnel);
+    int unset_tunnel(uint8_t __tunnel);
 private:
     void set_values();
     int socket_;
@@ -24,6 +26,7 @@ private:
     struct sockaddr_in addr_;
     socklen_t addr_len_;
     int index_;
+    uint8_t active_tunnels_ = 0;
 };
 
 #endif // CLIENT_HANDLER_HPP

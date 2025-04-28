@@ -1,26 +1,26 @@
 #include "spy_tunnel.hpp"
 
-SpyTunnel::SpyTunnel(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, std::shared_ptr<LogContext> __log_context, int __shutdown_event_fd)
+SpyTunnel::SpyTunnel(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, int __shutdown_event_fd, std::vector<int>*__p_tunnel_shutdown_fds)
     : p_ip_(__p_ip),
       p_port_(__p_port),
       client_index_(__client_index),
       p_shutdown_flag_(__p_shutdown_flag),
       connection_type_(__connection_type),
-      log_context_(__log_context),
       shutdown_event_fd_(__shutdown_event_fd),
-      event_log_(__log_context)
+      p_tunnel_shutdown_fds_(__p_tunnel_shutdown_fds)
 {
 }
 
-int SpyTunnel::run() {    
+int SpyTunnel::run() {   
     pid_t pid = fork();
     if (pid < 0) {
         return -1;
     } else if (pid == 0) {
         // Child Process
-
+        close(shutdown_event_fd_);
+        close(socket_);
         spawn_window();
-        event_log_ << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
+        std::cerr << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
         _exit(EXIT_FAILURE);
     }
 

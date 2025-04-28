@@ -9,7 +9,7 @@ typedef uint16_t Status;
 enum : CommandCode {
     TEST      = 0b00000001,
     KILL      = 0b00000010,
-    KEYLOGGER = 0b00000011
+    KEYLOGGER = 0b00000100,
 };
 
 enum : Status {

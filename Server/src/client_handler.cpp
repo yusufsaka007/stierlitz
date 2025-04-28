@@ -58,3 +58,17 @@ void ClientHandler::cleanup_client() {
 
     set_values();
 }
+
+int ClientHandler::set_tunnel(uint8_t __tunnel) {
+    if (active_tunnels_ & __tunnel) {
+        return -1; // Tunnel already set
+    }
+    active_tunnels_ |= __tunnel;
+}
+
+int ClientHandler::unset_tunnel(uint8_t __tunnel) {
+    if (!(active_tunnels_ & __tunnel)) {
+        return -1; // Tunnel not set 
+    }
+    active_tunnels_ &= ~__tunnel;
+}
