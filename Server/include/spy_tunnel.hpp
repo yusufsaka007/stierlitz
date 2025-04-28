@@ -5,23 +5,20 @@
 
 class SpyTunnel {
 public:
-    SpyTunnel(
-        std::string* __p_ip, 
+    int run();
+    ~SpyTunnel() = default;
+    void shutdown() {
+    }
+    int init(std::string* __p_ip, 
         uint* __p_port,
         int __client_index,
         std::atomic<bool>* __p_shutdown_flag,
         int __connection_type,
         int __shutdown_event_fd,
-        std::vector<int>* __p_tunnel_shutdown_fds
-    );
-
-    int run();
-    ~SpyTunnel() = default;
-    void shutdown() {
-    }
-
+        std::vector<int>* __p_tunnel_shutdown_fds);
 protected:
     void write_error(int fifo, const std::string& __msg);
+    
     virtual void spawn_window();
     virtual void handle_tunnel(int __socket, int __fifo_fd);
     virtual const char* get_fifo_path();

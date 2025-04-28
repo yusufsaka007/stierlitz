@@ -10,6 +10,11 @@
 ClientHandler::ClientHandler() {
     addr_len_ = sizeof(addr_);
     set_values();
+    for (int i = 0; i < TUNNEL_NUMS; i++) {
+        tunnel_types_[i] = -1;
+        tunnel_fds_[i] = -1;
+        tunnel_shutdown_fds_[i] = -1;
+    }
 }
 
 int ClientHandler::is_client_up(const int __fd) {
@@ -59,11 +64,18 @@ void ClientHandler::cleanup_client() {
     set_values();
 }
 
-int ClientHandler::set_tunnel(uint8_t __tunnel) {
+int* ClientHandler::set_tunnel(uint8_t __tunnel) {
     if (active_tunnels_ & __tunnel) {
-        return -1; // Tunnel already set
+        return nullptr; // Tunnel already set
     }
     active_tunnels_ |= __tunnel;
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        if (tunnel_types_[i] == -1) {
+            tunnel_types_[i] = __tunnel;
+            return &tunnel_fds_[i];
+        }
+    }
+    return nullptr; // No free tunnel slot available
 }
 
 int ClientHandler::unset_tunnel(uint8_t __tunnel) {
@@ -71,4 +83,21 @@ int ClientHandler::unset_tunnel(uint8_t __tunnel) {
         return -1; // Tunnel not set 
     }
     active_tunnels_ &= ~__tunnel;
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        if (tunnel_types_[i] == __tunnel) {
+            tunnel_types_[i] = -1;
+            
+            return tunnel_fds_[i];
+        }
+    }
+    return -1; // Tunnel not found
+}
+
+TunnelFDs ClientHandler::operator[](uint8_t __tunnel) const {
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        if (tunnel_types_[i] == __tunnel) {
+            return {tunnel_shutdown_fds_[i], tunnel_fds_[i]};
+        }
+    }
+    return {-1, -1}; // Tunnel not found
 }

