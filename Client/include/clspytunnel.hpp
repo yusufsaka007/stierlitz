@@ -5,15 +5,17 @@
 
 class CLSpyTunnel {
 public:
-    int init(char* __ip, const uint __port, int* __p_shutdown_flag);
+    int init(char* __ip, const uint __port, bool* __p_shutdown_flag);
+    void run();    
     void shutdown();
+protected:    
     virtual int get_conn_type();
-protected:
+    virtual void exec_tunnel(); // Tunnel specific
     int port_;
     char* ip_;
     int socket_;
     struct sockaddr_in server_addr_;
-    int* p_shutdown_flag_;
+    bool* p_shutdown_flag_;
     bool retry_flag_ = false;
 };  
 

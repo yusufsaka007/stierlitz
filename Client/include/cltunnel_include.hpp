@@ -9,7 +9,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <pthread.h>
 #include "common.hpp"
 #include "client_macros.hpp"
 #include "cldata_handler.hpp"
-#endif
+
+#endif // CLTUNNEL_INCLUDE_HPP
