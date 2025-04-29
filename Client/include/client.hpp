@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
+#include "cldata_handler.hpp"
 #include "common.hpp"
 #include "client_macros.hpp"
 
@@ -22,7 +23,6 @@ public:
     int init();
     void start();
     void shutdown();
-    void send_out(Status __status);
 private:
     char ip_[MAX_IP_LEN];
     int port_;
