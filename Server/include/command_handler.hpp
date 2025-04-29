@@ -34,6 +34,7 @@
 #define HELP_ARG 3
 #define KILL_ARG 4
 #define VERBOSITY_ARG 5
+#define REMOVE_ARG 6
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
@@ -85,7 +86,7 @@ public:
         EventLog* __p_event_log,
         std::atomic<bool>* __p_shutdown_flag,
         std::string* __p_ip,
-        uint* __p_port,
+        uint __port,
         int* __p_user_verbosity,
         int __shutdown_event_fd
     );
@@ -104,7 +105,7 @@ private:
     void kill();
     void keylogger();
 
-    void find_open_port();
+    int find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    
     void send_client(CommandCode __command, uint8_t __port, int __client_index);
     void send_client(CommandCode __command);
@@ -115,7 +116,7 @@ private:
     int* p_user_verbosity_;
     std::atomic<bool>* p_shutdown_flag_;
     std::string* p_ip_;
-    uint* p_port_;
+    uint port_;
     std::unordered_map<std::string,Command> command_map_;
     std::vector<Argument> argument_list_;
     int selected_client_;

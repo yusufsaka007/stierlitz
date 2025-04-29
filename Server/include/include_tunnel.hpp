@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include "client_handler.hpp"
 #include "event_logger.hpp"
 #include "scoped_epoll.hpp"
 #include "server_macros.hpp"

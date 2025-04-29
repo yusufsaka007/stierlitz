@@ -10,11 +10,6 @@
 ClientHandler::ClientHandler() {
     addr_len_ = sizeof(addr_);
     set_values();
-    for (int i = 0; i < TUNNEL_NUMS; i++) {
-        tunnel_types_[i] = -1;
-        tunnel_fds_[i] = -1;
-        tunnel_shutdown_fds_[i] = -1;
-    }
 }
 
 int ClientHandler::is_client_up(const int __fd) {
@@ -54,50 +49,69 @@ void ClientHandler::set_values() {
     ip_ = "";
     index_ = -1;
     memset(&addr_, 0, addr_len_);
+    for (int i = 0; i < TUNNEL_NUMS; i++) {
+        tunnel_codes_[i] = -1;
+        tunnel_fds_[i] = {-1, -1};
+        tunnels_[i] = nullptr;
+    }
 }
 
 void ClientHandler::cleanup_client() {
     if (ClientHandler::is_client_up(socket_) == 0) {
         close(socket_);
     }
-
+    if (!(active_tunnels_ & 0x00)) {
+        for (int i=0;i<TUNNEL_NUMS;i++) {
+            if (tunnel_codes_[i] != -1) {
+                unset_tunnel(tunnel_codes_[i]);
+            }
+        }
+    }
     set_values();
 }
 
-int* ClientHandler::set_tunnel(uint8_t __tunnel) {
-    if (active_tunnels_ & __tunnel) {
-        return nullptr; // Tunnel already set
-    }
-    active_tunnels_ |= __tunnel;
+TunnelFDs* ClientHandler::operator[](uint8_t __tunnel) {
     for (int i=0;i<TUNNEL_NUMS;i++) {
-        if (tunnel_types_[i] == -1) {
-            tunnel_types_[i] = __tunnel;
+        if (tunnel_codes_[i] == __tunnel) {
             return &tunnel_fds_[i];
         }
     }
-    return nullptr; // No free tunnel slot available
+    return nullptr;
 }
 
+int ClientHandler::set_tunnel(SpyTunnel* __p_tunnel, uint8_t __tunnel) {
+    if (active_tunnels_ & __tunnel) {
+        return -1; // Tunnel already set
+    }
+    active_tunnels_ |= __tunnel;
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        if (tunnel_codes_[i] == -1) {
+            tunnel_codes_[i] = __tunnel;
+            tunnels_[i] = __p_tunnel; // For cleanup we need to have access to the SpyTunnel object
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * Called when <spy_tunnel> -r -i <client_index> is called
+ * Or when client->cleanup_client()
+ */
 int ClientHandler::unset_tunnel(uint8_t __tunnel) {
     if (!(active_tunnels_ & __tunnel)) {
         return -1; // Tunnel not set 
     }
     active_tunnels_ &= ~__tunnel;
     for (int i=0;i<TUNNEL_NUMS;i++) {
-        if (tunnel_types_[i] == __tunnel) {
-            tunnel_types_[i] = -1;
-            
-            return tunnel_fds_[i];
+        if (tunnel_codes_[i] == __tunnel) {
+            tunnel_codes_[i] = -1;
+            if (tunnels_[i] != nullptr) {
+                tunnels_[i]->shutdown(); // Cleanup the tunnel, close sockets, shutdown thread gracefully
+                delete tunnels_[i];
+                tunnels_[i] = nullptr;
+            }
         }
     }
-    return -1; // Tunnel not found
-}
-
-TunnelFDs ClientHandler::operator[](uint8_t __tunnel) const {
-    for (int i=0;i<TUNNEL_NUMS;i++) {
-        if (tunnel_types_[i] == __tunnel) {
-            return {tunnel_shutdown_fds_[i], tunnel_fds_[i]};
-        }
-    }
-    return {-1, -1}; // Tunnel not found
+    return 0;
 }

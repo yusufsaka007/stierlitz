@@ -7,11 +7,12 @@
 #include <unistd.h>
 #include <string>
 #include <cstring>
+#include <spy_tunnel.hpp>
 #include "common.hpp"
 
 struct TunnelFDs {
-    int shutdown_fd_;
     int tunnel_fd_;
+    int shutdown_fd_;
 };
 
 class ClientHandler{
@@ -23,9 +24,9 @@ public:
     int socket() const;
     std::string ip() const;
     int index() const;
-    int* set_tunnel(uint8_t __tunnel);
-    int unset_tunnel(uint8_t __tunnel);
-    TunnelFDs operator[](uint8_t __tunnel) const;
+    int set_tunnel(SpyTunnel* __p_tunnel, uint8_t __tunnel_code);
+    int unset_tunnel(uint8_t __tunnel_code);
+    TunnelFDs* operator[](uint8_t __tunnel_code);
 private:
     void set_values();
     int socket_;
@@ -34,9 +35,9 @@ private:
     socklen_t addr_len_;
     int index_;
     uint8_t active_tunnels_ = 0x00;
-    uint8_t tunnel_types_[TUNNEL_NUMS];
-    int tunnel_fds_[TUNNEL_NUMS];
-    int tunnel_shutdown_fds_[TUNNEL_NUMS];
+    uint8_t tunnel_codes_[TUNNEL_NUMS];
+    TunnelFDs tunnel_fds_[TUNNEL_NUMS];
+    SpyTunnel* tunnels_[TUNNEL_NUMS]; // This pointer is used to access tunnel during cleanup
 };
 
 #endif // CLIENT_HANDLER_HPP
