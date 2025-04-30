@@ -6,6 +6,7 @@
  */
 
 #include "client_handler.hpp"
+#include <spy_tunnel.hpp>
 
 ClientHandler::ClientHandler() {
     addr_len_ = sizeof(addr_);

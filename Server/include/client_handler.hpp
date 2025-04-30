@@ -7,8 +7,9 @@
 #include <unistd.h>
 #include <string>
 #include <cstring>
-#include <spy_tunnel.hpp>
 #include "common.hpp"
+
+class SpyTunnel;
 
 struct TunnelFDs {
     int tunnel_fd_;

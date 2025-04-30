@@ -3,13 +3,17 @@
 
 #include "include_tunnel.hpp"
 
+class ClientHandler;
+struct TunnelFDs;
+
 class SpyTunnel {
 public:
+    SpyTunnel() = default;
+    ~SpyTunnel();
     int run();
-    ~SpyTunnel() = default;
-    void shutdown() {
-    }
-    int init(std::string* __p_ip, 
+    void shutdown();
+    int init(
+        std::string* __p_ip, 
         uint __port,
         ClientHandler* __p_client,
         std::atomic<bool>* __p_shutdown_flag,

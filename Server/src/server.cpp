@@ -421,7 +421,7 @@ c2_cleanup:
         kill(pid, SIGTERM);
         waitpid(pid, nullptr, 0);
     }
-    if (shutdown_flag_) {
+    if (!shutdown_flag_) {
         event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;
         shutdown();
     }

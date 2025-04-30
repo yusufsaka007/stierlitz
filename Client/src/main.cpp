@@ -11,6 +11,10 @@ int main(int argc, char* argv[]) {
     int port = atoi(argv[2]);
 
     Client client(ip, port);
+    if (client.init() < 0) {
+        printf("Failed to initialize client\n");
+        return -1;
+    }
     client.start();
     client.shutdown();
 

@@ -1,4 +1,4 @@
-#include "scoped_epoll.h"
+#include "scoped_epoll.hpp"
 
 ScopedEpollFD::ScopedEpollFD(){
     fd = -1;
