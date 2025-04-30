@@ -16,7 +16,7 @@ protected:
     int socket_;
     struct sockaddr_in server_addr_;
     bool* p_shutdown_flag_;
-    bool retry_flag_ = false;
+    bool tunnel_shutdown_flag_ = false;
 };  
 
 #endif // CLSPYTUNNEL_HPP

