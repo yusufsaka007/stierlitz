@@ -151,7 +151,7 @@ int Server::accept_client() {
         std::unique_lock<std::mutex> lock(accept_mutex_);
         accept_cv_.wait(lock, [this] {return client_count_ < max_connections_ || shutdown_flag_;});
         if (shutdown_flag_) {
-            event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+            event_log << YELLOW << "[Server::accept_client] Shutdown signal received - accept_cv_" << RESET;
             return 0;
         }
 
@@ -160,7 +160,7 @@ int Server::accept_client() {
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
         if (nfds == -1) {
             if (errno == EINTR) {
-                event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received - EINTR" << RESET;
                 return 0;
             } else {
                 event_log << RED << "[Server::accept_client] Error waiting for epoll event: " << strerror(errno) << RESET;
@@ -170,7 +170,7 @@ int Server::accept_client() {
         
         for (int i=0; i<nfds; i++) {
             if (events[i].data.fd == shutdown_event_fd_.fd) {
-                event_log << YELLOW << "[Server::accept_client] Shutdown signal received" << RESET;
+                event_log << YELLOW << "[Server::accept_client] Shutdown signal received - shutdown_event_fd_" << RESET;
                 uint64_t u;
                 read(shutdown_event_fd_.fd, &u, sizeof(u));
                 return 0;
@@ -314,7 +314,7 @@ void Server::handle_c2() {
 
     // Parent process
     EventLog event_log(log_context_);
-    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, port_, &user_verbosity_, shutdown_event_fd_.fd);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, port_, &user_verbosity_);
     ScopedEpollFD epoll_fd;
     int rc = 0;
     epoll_fd.fd = epoll_create1(0);
@@ -398,6 +398,12 @@ void Server::handle_c2() {
                     if (strncmp(cmd, "exit", 4) == 0) {
                         event_log << YELLOW << "[Server::handle_c2] C2 terminal exit command received" << RESET;
                         shutdown_flag_ = true;
+
+                        // Remove shutdown_event_fd from epoll since we don't need it anymore
+                        if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_DEL, shutdown_event_fd_.fd, nullptr) < 0) {
+                            event_log << RED << "[Server::handle_c2] Error removing shutdown eventfd from epoll: " << strerror(errno) << RESET;
+                        }
+
                         goto c2_cleanup;
                     } else if (strncmp(cmd, "debug", 5) == 0) {
                         event_log << YELLOW << "[Server::handle_c2] Debug command received" << RESET;
@@ -409,8 +415,7 @@ void Server::handle_c2() {
                         }
                         event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] Debug message sent to C2 terminal" << RESET;
                         continue;
-                    } 
-                    
+                    }
                     command_handler.execute_command(cmd, bytes_read);                    
                 }
             }
@@ -421,7 +426,7 @@ c2_cleanup:
         kill(pid, SIGTERM);
         waitpid(pid, nullptr, 0);
     }
-    if (!shutdown_flag_) {
+    if (shutdown_flag_) {
         event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;
         shutdown();
     }
@@ -458,5 +463,4 @@ void Server::shutdown() {
     }
 
     cleanup_server();
-    
 }

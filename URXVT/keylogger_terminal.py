@@ -24,6 +24,7 @@ if __name__ == "__main__":
     try:
         print(f"{Fore.GREEN}\n\n{'=='*10}Listening For Keylogs{'=='*10}{Style.RESET_ALL}\n\n{Fore.MAGENTA}")
         while True:
+            line = ""
             rlist, _, _ = select.select([fifo], [], [], 1)
             if fifo in rlist:
                 line = fifo.readline().strip()

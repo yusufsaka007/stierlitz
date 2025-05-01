@@ -33,6 +33,7 @@ public:
 class Client {
 public:
     Client(const char* __ip, const int __port);
+    int is_valid_tunnel(CommandCode __tunnel_code);
     int init();
     void start();
     void shutdown();

