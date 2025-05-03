@@ -11,13 +11,13 @@ bool send_out(int __fd, Status __status) {
     
     int rc = send(__fd, buf, OUT_SIZE, 0);
     if (rc < 0) {
-        printf("Error sending data: %s\n", strerror(errno));
+        printf("[send_out] Error sending data: %s\n", strerror(errno));
         return true;
     } else if (rc == 0) {
-        printf("Server closed connection\n");
+        printf("[send_out] Server closed connection\n");
         return true;
     } else {
-        printf("Sent %d bytes to server\n", rc);
+        printf("[send_out] Sent %d bytes to server\n", rc);
     }
 
     return false;

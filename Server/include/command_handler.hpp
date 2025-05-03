@@ -21,8 +21,6 @@
 #include <filesystem>
 #include <chrono>
 #include <thread>
-#include "spy_tunnel.hpp"
-#include "keylogger.hpp"
 #include "common.hpp"
 #include "event_logger.hpp"
 #include "server_macros.hpp"

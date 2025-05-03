@@ -12,7 +12,7 @@ if __name__ == "__main__":
     fifo_dir = os.path.join(script_dir, "fifo")
     os.makedirs(fifo_dir, exist_ok=True)
 
-    fifo_path = os.path.join(fifo_dir, "c2_out_fifo")
+    fifo_path = os.path.join(fifo_dir, "keylogger_fifo")
     if not os.path.exists(fifo_path):
         os.mkfifo(fifo_path)
 
