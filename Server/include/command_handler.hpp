@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <chrono>
 #include <thread>
+#include "spy_tunnel.hpp"
 #include "common.hpp"
 #include "event_logger.hpp"
 #include "server_macros.hpp"
@@ -85,7 +86,9 @@ public:
         std::atomic<bool>* __p_shutdown_flag,
         std::string* __p_ip,
         uint __port,
-        int* __p_user_verbosity
+        int* __p_user_verbosity,
+        std::vector<Tunnel>* __p_tunnels,
+        std::shared_ptr<TunnelContext> __tunnel_context
     );
     ~CommandHandler();
     void execute_command(char* __cmd, int __len);
@@ -107,6 +110,8 @@ private:
     void send_client(CommandCode __command, uint8_t __port, int __client_index);
     void send_client(CommandCode __command);
     void cleanup();
+    void handle_tunnelt(Tunnel* __p_tunnel);
+    Tunnel* get_tunnel(int __client_index, CommandCode __command_code);
 private:
     std::vector<ClientHandler*>* p_clients_;
     EventLog* p_event_log_;
@@ -119,7 +124,8 @@ private:
     int selected_client_;
     std::string cmd_;
     std::unordered_map<int, std::any> arg_map_;
-    std::vector<int> tunnel_shutdown_fds_;
+    std::vector<Tunnel>* p_tunnels_;
+    std::shared_ptr<TunnelContext> tunnel_context_;
 };
 
 #endif // COMMAND_HANDLER_HPP

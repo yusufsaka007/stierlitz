@@ -18,4 +18,5 @@
 #define MAGENTA "\033[35m"
 #define CYAN "\033[36m"
 
+
 #endif // MACROS_HPP

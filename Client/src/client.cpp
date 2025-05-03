@@ -106,6 +106,7 @@ void Client::start() {
                 sleep(1);
                 if (socket_ >= 0) {
                     close(socket_);
+                    socket_ = -1;
                 }
             }
     }

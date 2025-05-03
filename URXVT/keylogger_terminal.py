@@ -34,9 +34,6 @@ if __name__ == "__main__":
             if "[__end__]" in line:
                 print(f"\n{Fore.MAGENTA}[__end__]{Style.RESET_ALL}\n")
                 break
-            if "[__error__]" in line:
-                print(f"\n{Fore.RED}{line}{Style.RESET_ALL}\n")
-                break
             print(line, end='', flush=True)
     except KeyboardInterrupt:
             print(f"\n{Fore.RED}[!] Exiting...{Style.RESET_ALL}")
