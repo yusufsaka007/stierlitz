@@ -59,7 +59,7 @@ private: // Variables
     std::condition_variable accept_cv_;
     std::shared_ptr<LogContext> log_context_;
 
-    std::vector<Tunnel> tunnels_;
+    std::vector<Tunnel*> tunnels_;
     std::shared_ptr<TunnelContext> tunnel_context_;
 };
 

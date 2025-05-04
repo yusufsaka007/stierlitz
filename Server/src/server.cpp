@@ -192,8 +192,6 @@ int Server::accept_client() {
                     std::lock_guard<std::mutex> lock(client_mutex_);
                     for (int i = 0; i < max_connections_; i++) {
                         if (clients_[i] == nullptr) {
-                            event_log << MAGENTA << "[Server::accept_client] Found free slot for client " << i << RESET;
-                            //clients_[i] = std::make_shared<ClientHandler>();
                             client = new ClientHandler();
                             clients_[i] = client;
                             client = nullptr;
@@ -296,7 +294,7 @@ void Server::log_event() {
 
 // If a tunnel is stopped due to error or user wishes to remove it, it will be cleaned up here
 void Server::cleanup_tunnel_queue() {
-    while (!shutdown_flag_.load() || !tunnels_.empty()) {
+    while (!shutdown_flag_.load()) {
         std::unique_lock<std::mutex> lock(tunnel_context_->tunnel_mutex_);
         tunnel_context_->tunnel_cv_.wait(lock, [this] {return !tunnel_context_->tunnel_queue_.empty() || shutdown_flag_.load();});
 
@@ -305,14 +303,9 @@ void Server::cleanup_tunnel_queue() {
             tunnel_context_->tunnel_queue_.pop();
             if (tunnel != nullptr) {
                 tunnel->p_spy_tunnel_->shutdown();
-                std::cout << MAGENTA << "[Server::cleanup_tunnel_queue] Erasing " << tunnel->client_index_ << " " << tunnel->command_code_ << RESET; 
                 erase_tunnel(&tunnels_, tunnel->client_index_, tunnel->command_code_);
-                std::cout << MAGENTA << "[Server::cleanup_tunnel_queue] Tunnel erased" << RESET;
-            } else {
-                std::cout << MAGENTA << "[Server::cleanup_tunnel_queue] Tunnel is null" << RESET;
             }
-        }
-        
+        }        
     }
 }
 
@@ -453,7 +446,6 @@ c2_cleanup:
         waitpid(pid, nullptr, 0);
     }
     if (shutdown_flag_) {
-        event_log << MAGENTA << "[Server::handle_c2] SHUTTING DOWN" << RESET;
         shutdown();
     }
 }
@@ -474,28 +466,29 @@ void Server::cleanup_server() {
 void Server::shutdown() { 
     // Wake up tunnel threads
     uint64_t u = 1;
-    std::cout << MAGENTA << "[Server::shutdown] Sending shutdown signal to tunnels with size: " << tunnels_.size() << RESET;
     for (auto it=tunnels_.begin();it!=tunnels_.end();it++) {
-        if (it->p_tunnel_shutdown_fd_ == nullptr) {
-            std::cout << MAGENTA << "[Server::shutdown] Tunnel shutdown fd not initialized properly" << RESET;
+        if ((*it)->p_tunnel_shutdown_fd_ == nullptr) {
             continue;
         }
-        write(*(it->p_tunnel_shutdown_fd_), &u, sizeof(u));
-        std::cout << MAGENTA << "[Server::shutdown] Tunnel shutdown signal sent" << RESET;
+        write(*((*it)->p_tunnel_shutdown_fd_), &u, sizeof(u));
     }
-    
+
+    while (!tunnel_context_->tunnel_queue_.size() < tunnels_.size()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
     shutdown_flag_ = true;
+
+    {
+        std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+        tunnel_context_->tunnel_cv_.notify_one();
+    }
 
     write(shutdown_event_fd_.fd, &u, sizeof(u));
 
     {
         std::lock_guard<std::mutex> lock(log_context_->log_mutex_);
         log_context_->log_cv_.notify_one();
-    }
-
-    if (tunnels_.empty()) {
-        std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-        tunnel_context_->tunnel_cv_.notify_one();
     }
     
     for (auto& thread : client_threads_) {

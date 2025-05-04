@@ -87,7 +87,7 @@ public:
         std::string* __p_ip,
         uint __port,
         int* __p_user_verbosity,
-        std::vector<Tunnel>* __p_tunnels,
+        std::vector<Tunnel*>* __p_tunnels,
         std::shared_ptr<TunnelContext> __tunnel_context
     );
     ~CommandHandler();
@@ -124,7 +124,7 @@ private:
     int selected_client_;
     std::string cmd_;
     std::unordered_map<int, std::any> arg_map_;
-    std::vector<Tunnel>* p_tunnels_;
+    std::vector<Tunnel*>* p_tunnels_;
     std::shared_ptr<TunnelContext> tunnel_context_;
 };
 
