@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <pthread.h>
+#include <atomic>
 #include "common.hpp"
 #include "client_macros.hpp"
 #include "cldata_handler.hpp"

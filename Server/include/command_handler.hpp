@@ -110,7 +110,7 @@ private:
     void send_client(CommandCode __command, uint8_t __port, int __client_index);
     void send_client(CommandCode __command);
     void cleanup();
-    void handle_tunnelt(Tunnel* __p_tunnel);
+    void handle_tunnelt(Tunnel* __p_tunnel, int __connection_type);
     Tunnel* get_tunnel(int __client_index, CommandCode __command_code);
 private:
     std::vector<ClientHandler*>* p_clients_;

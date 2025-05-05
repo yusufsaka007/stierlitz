@@ -6,20 +6,20 @@
 class SpyTunnel {
 public:
     SpyTunnel() = default;
-    int init(std::string __ip, uint __port, int*& p_tunnel_shutdown_fd, int __connection_type);
+    int init(const std::string& __ip, uint __port, int*& p_tunnel_shutdown_fd, int __connection_type);
     void run();
     void shutdown();
     void edit_path(int __client_index, CommandCode __command_code);
 protected:
-    std::string ip_;
-    uint port_;
     struct sockaddr_in tunnel_addr_;
-    int tunnel_socket_;
+    int tunnel_socket_ = -1;
+    int tunnel_end_socket_ = -1;
     ScopedEpollFD tunnel_shutdown_fd_;
     int tunnel_fifo_ = -1;
     pid_t pid_;
     std::string fifo_path_;
 
+    int accept_tunnel_end();
     void write_fifo_error(const std::string& __msg);
     virtual void spawn_window();
 };
