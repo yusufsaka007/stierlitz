@@ -264,6 +264,13 @@ void Server::handle_client(ClientHandler* client) {
     }
 
     event_log << YELLOW << "[Server::handle_client] Cleaning up client " << client->index() << RESET;
+    
+    for (auto& tunnel : tunnels_) {
+        if (tunnel->client_index_ == client->index()) {
+            uint64_t u = 1;
+            write(*(tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+        }
+    }
     {
         std::lock_guard<std::mutex> lock(client_mutex_);
         clients_[client->index()] = nullptr;

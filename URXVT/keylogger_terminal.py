@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 import os
-import time
-import threading
 import select
 from colorama import Fore, Style, init
 import sys
 
 if __name__ == "__main__":
+    fifo_name = sys.argv[1]
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     fifo_dir = os.path.join(script_dir, "fifo")
     os.makedirs(fifo_dir, exist_ok=True)
 
-    fifo_path = os.path.join(fifo_dir, "keylogger_fifo")
+    fifo_path = os.path.join(fifo_dir, fifo_name)
     if not os.path.exists(fifo_path):
         os.mkfifo(fifo_path)
 
@@ -42,6 +42,7 @@ if __name__ == "__main__":
             print(f"\n{Fore.RED}[!] Exiting...{Style.RESET_ALL}")
     finally:
         fifo.close()
+        os.remove(fifo_path)
     try:
         input(f"{Fore.YELLOW}[!] Press Enter to exit...{Style.RESET_ALL}")
     except KeyboardInterrupt:
