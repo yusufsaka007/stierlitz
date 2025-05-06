@@ -57,6 +57,8 @@ void CLSpyTunnel::run() {
     while (!tunnel_shutdown_flag_.load()) {
         const char* test = "test";
         send(tunnel_socket_, test, strlen(test), 0);
+        printf("[CLSpyTunnel] Sending test data to tunnel server\n");
         sleep(1);
+
     }
 }

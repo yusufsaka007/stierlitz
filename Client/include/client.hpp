@@ -25,6 +25,7 @@ public:
     int init();
     void start();
     void shutdown();
+    void cleanup();
 private:
     char ip_[MAX_IP_LEN];
     int port_;

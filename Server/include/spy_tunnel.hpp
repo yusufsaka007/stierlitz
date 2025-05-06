@@ -20,6 +20,7 @@ protected:
     std::string fifo_path_;
 
     int accept_tunnel_end();
+    int create_epoll_fd(ScopedEpollFD& __epoll_fd);
     void write_fifo_error(const std::string& __msg);
     virtual void spawn_window();
 };

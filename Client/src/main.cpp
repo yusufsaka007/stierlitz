@@ -13,6 +13,7 @@ void sigterm_handler(int signum) {
 
 
 int main(int argc, char* argv[]) {
+    signal(SIGPIPE, SIG_IGN);
     struct sigaction sa;
     sa.sa_handler = sigterm_handler;
     sigemptyset(&sa.sa_mask);
@@ -34,7 +35,6 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     client->start();
-    client->shutdown();
 
     delete client;
 

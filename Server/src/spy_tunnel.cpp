@@ -13,6 +13,9 @@ int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutd
         return -1;
     }
 
+    int flags = fcntl(tunnel_socket_, F_GETFL, 0);
+    fcntl(tunnel_socket_, F_SETFL, flags | O_NONBLOCK);
+
     int opt = 1;
     setsockopt(tunnel_socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
@@ -54,37 +57,28 @@ void SpyTunnel::run() {
         return;
     }
     
-    ScopedEpollFD epoll_fd;
-    epoll_fd.fd = epoll_create1(0);
-    if (epoll_fd.fd == -1) {
-        write_fifo_error("[SpyTunnel::run] Error creating epoll instance " + std::string(strerror(errno)));
-        return;
-    }
-    
-    tunnel_end_socket_ = accept_tunnel_end();
-    if (tunnel_end_socket_ == -1) {
-        return;
-    }
-
-    struct epoll_event tunnel_end_event;
-    tunnel_end_event.data.fd = tunnel_end_socket_;
-    tunnel_end_event.events = EPOLLIN;
-    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_end_socket_, &tunnel_end_event) == -1) {
-        write_fifo_error("[SpyTunnel::run] Error adding tunnel end socket to epoll " + std::string(strerror(errno)));
-        return;
-    }
-
     tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
     if (tunnel_shutdown_fd_.fd == -1) {
         write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
         return;
     }
 
-    struct epoll_event shutdown_event;
-    shutdown_event.data.fd = tunnel_shutdown_fd_.fd;
-    shutdown_event.events = EPOLLIN;
-    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_shutdown_fd_.fd, &shutdown_event) == -1) {
-        write_fifo_error("[SpyTunnel::run] Error adding shutdown eventfd to epoll " + std::string(strerror(errno)));
+    int rc = accept_tunnel_end();
+    if (rc < 0) {
+        return;
+    }
+
+    ScopedEpollFD epoll_fd;
+    rc = create_epoll_fd(epoll_fd);
+    if (rc < 0) {
+        return;
+    }
+    
+    struct epoll_event tunnel_end_event;
+    tunnel_end_event.data.fd = tunnel_end_socket_;
+    tunnel_end_event.events = EPOLLIN;
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_end_socket_, &tunnel_end_event) == -1) {
+        write_fifo_error("[SpyTunnel::run] Error adding tunnel end socket to epoll " + std::string(strerror(errno)));
         return;
     }
     
@@ -129,25 +123,72 @@ void SpyTunnel::run() {
 }
 
 int SpyTunnel::accept_tunnel_end() {
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
-
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(tunnel_socket_, &read_fds);
-
-    int rc = select(tunnel_socket_ + 1, &read_fds, nullptr, nullptr, &timeout);
-    if (rc == -1) {
-        write_fifo_error("[SpyTunnel::accept_tunnel_end] Error in select " + std::string(strerror(errno)));
-        return -1;
-    } else if (rc == 0) {
-        write_fifo_error("[SpyTunnel::accept_tunnel_end] Timeout occured waiting for tunnel end. Please rerun the command");
+    ScopedEpollFD accept_epoll_fd;
+    int rc = create_epoll_fd(accept_epoll_fd);
+    if (rc < 0) {
         return -1;
     }
 
-    // Socket is ready for accepting
-    return accept(tunnel_socket_, nullptr, nullptr);
+    struct epoll_event accept_event;
+    accept_event.data.fd = tunnel_socket_;
+    accept_event.events = EPOLLIN;
+    if (epoll_ctl(accept_epoll_fd.fd, EPOLL_CTL_ADD, tunnel_socket_, &accept_event) == -1) {
+        write_fifo_error("[SpyTunnel::accept_tunnel_end] Error adding tunnel socket to epoll " + std::string(strerror(errno)));
+        return -1;
+    }
+
+    struct epoll_event events[2];
+    while (true) {
+        int nfds = epoll_wait(accept_epoll_fd.fd, events, 2, -1);
+        if (nfds < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            write_fifo_error("[SpyTunnel::accept_tunnel_end] Error waiting for epoll event " + std::string(strerror(errno)));
+            return -1;
+        }
+
+        for (int i=0;i<nfds;i++) {
+            if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
+                uint64_t u;
+                read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
+                std::cout << MAGENTA << "[SpyTunnel::accept_tunnel_end] Shutdown signal received" << RESET;
+                if (tunnel_fifo_ != -1) {
+                    write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
+                    close(tunnel_fifo_);
+                }
+                return -1;
+            } else if (events[i].data.fd == tunnel_socket_) {
+                tunnel_end_socket_ = accept(tunnel_socket_, nullptr, nullptr);
+                if (tunnel_end_socket_ == -1) {
+                    write_fifo_error("[SpyTunnel::accept_tunnel_end] Error accepting tunnel end socket " + std::string(strerror(errno)));
+                    return -1;
+                }
+                epoll_ctl(accept_epoll_fd.fd, EPOLL_CTL_DEL, tunnel_shutdown_fd_.fd, nullptr);
+                return 0;
+            }
+        }
+    }
+    
+    return -1;
+}
+
+int SpyTunnel::create_epoll_fd(ScopedEpollFD& __epoll_fd) {
+    __epoll_fd.fd = epoll_create1(0);
+    if (__epoll_fd.fd == -1) {
+        write_fifo_error("[SpyTunnel::create_epoll_fd] Error creating epoll instance " + std::string(strerror(errno)));
+        return -1;
+    }
+
+    struct epoll_event shutdown_event;
+    shutdown_event.data.fd = tunnel_shutdown_fd_.fd;
+    shutdown_event.events = EPOLLIN;
+    if (epoll_ctl(__epoll_fd.fd, EPOLL_CTL_ADD, tunnel_shutdown_fd_.fd, &shutdown_event) == -1) {
+        write_fifo_error("[SpyTunnel::create_epoll_fd] Error adding shutdown eventfd to epoll " + std::string(strerror(errno)));
+        return -1;
+    }
+
+    return 0;
 }
 
 void SpyTunnel::edit_path(int __client_index, CommandCode __command_code) {
