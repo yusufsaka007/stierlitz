@@ -2,5 +2,6 @@
 #define CLIENT_MACROS_HPP
 
 #define MAX_IP_LEN 40
+#define OBF_KEY 0XAF
 
 #endif // CLIENT_MACROS_HPP

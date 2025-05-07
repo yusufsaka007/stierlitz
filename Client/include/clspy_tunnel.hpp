@@ -14,7 +14,8 @@ protected:
 };
 
 class CLKeylogger : public CLSpyTunnel {
-
+public:
+    void run() override;
 };
 
 class CLPacketTunnel : public CLSpyTunnel {

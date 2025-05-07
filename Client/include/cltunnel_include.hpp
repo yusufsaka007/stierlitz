@@ -11,6 +11,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <atomic>
+#include <math.h>
+#include <fcntl.h>
+#include <linux/input.h>
 #include "common.hpp"
 #include "client_macros.hpp"
 #include "cldata_handler.hpp"

