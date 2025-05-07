@@ -20,6 +20,9 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <fstream>
+#include "event_logger.hpp"
+#include "data_handler.hpp"
 #include "common.hpp"
 #include "scoped_epoll.hpp"
 #include "server_macros.hpp"

@@ -3,3 +3,4 @@ build/
 bin/
 URXVT/fifo
 URXVT/test.py
+test/

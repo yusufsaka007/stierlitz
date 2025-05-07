@@ -230,7 +230,7 @@ int Server::accept_client() {
 }
 
 void Server::handle_client(ClientHandler* client) {
-    char buffer[MAX_BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
     int recv_rc;
     int send_rc;
     

