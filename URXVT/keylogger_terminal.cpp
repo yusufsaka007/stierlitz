@@ -70,8 +70,6 @@ const char* keycode_to_utf8(struct xkb_state* state, xkb_keycode_t keycode) {
 }
 
 int main(int argc, char* argv[]) {
-    int caps_lock = 0;
-
     setvbuf(stdout, nullptr, _IONBF, 0);
 
     std::string fifo_name = argv[1];
@@ -120,7 +118,9 @@ int main(int argc, char* argv[]) {
             ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
             if (bytes_read > 0) {
                 if (bytes_read == sizeof(unsigned short)) {
-                    xkb_keycode_t xkb_keycode = *reinterpret_cast<xkb_keycode_t*>(buffer) + 8;
+                    unsigned short raw_code;
+                    memcpy(&raw_code, buffer, sizeof(unsigned short));
+                    xkb_keycode_t xkb_keycode = static_cast<xkb_keycode_t>(raw_code + 8);
                     const char* utf8_key = keycode_to_utf8(state, xkb_keycode);
                     printf("%s", utf8_key);
                 } else {

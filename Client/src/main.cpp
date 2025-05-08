@@ -8,7 +8,6 @@ void sigterm_handler(int signum) {
         client->shutdown();
     }
 
-    delete client;
 }
 
 
@@ -36,7 +35,8 @@ int main(int argc, char* argv[]) {
     }
     client->start();
 
-    delete client;
-
+    if (client) {
+        delete client;
+    }
     return 0;
 }

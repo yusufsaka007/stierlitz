@@ -4,3 +4,4 @@ bin/
 URXVT/fifo
 URXVT/test.py
 test/
+URXVT/keylogger_terminal
