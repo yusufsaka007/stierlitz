@@ -13,16 +13,6 @@ protected:
     int tunnel_socket_;
 };
 
-class CLKeylogger : public CLSpyTunnel {
-public:
-    void run() override;
-};
-
-class CLPacketTunnel : public CLSpyTunnel {
-public:
-    void run() override;
-};
-
 struct CLTunnel {
     CLSpyTunnel* clspy_tunnel_ = nullptr;
     pthread_t thread;

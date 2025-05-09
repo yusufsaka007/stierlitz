@@ -12,10 +12,12 @@ public:
     void send_dev();
     void shutdown();
     void edit_fifo_path(int __client_index, CommandCode __command_code);
+    void set_dev(int __dev_num);
+    void set_out(const std::string& __out_name);
     
 protected:
     uint32_t dev_num_;
-    std::string layout_{""};
+    std::string out_name_{""};
     struct sockaddr_in tunnel_addr_;
     int tunnel_socket_ = -1;
     int tunnel_end_socket_ = -1;
@@ -28,26 +30,6 @@ protected:
     int create_epoll_fd(ScopedEpollFD& __epoll_fd);
     void write_fifo_error(const std::string& __msg);
     virtual void spawn_window();
-};
-
-class Keylogger : public SpyTunnel {
-public:
-    Keylogger() = default;
-    void set_dev(int __dev_num);
-    void set_layout(const std::string& __layout);
-protected:
-    void spawn_window() override;
-};
-
-class PacketTunnel : public SpyTunnel {
-public:
-    PacketTunnel(const std::string& __file_name, const std::string& __out_name, EventLog* __p_event_log, size_t __limit=0);
-    void run() override;
-protected:
-    EventLog* p_event_log_;
-    std::string file_name_;
-    std::string out_name_;
-    size_t limit_ = 0;
 };
 
 struct Tunnel {

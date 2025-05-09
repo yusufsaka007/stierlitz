@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <queue>
 #include <fstream>
+#include <sys/eventfd.h>
 #include "event_logger.hpp"
 #include "data_handler.hpp"
 #include "common.hpp"

