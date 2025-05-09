@@ -9,12 +9,11 @@ public:
     virtual ~SpyTunnel();
     int init(const std::string& __ip, uint __port, int*& p_tunnel_shutdown_fd, int __connection_type);
     virtual void run();
-    void send_dev();
+    
     void shutdown();
     void edit_fifo_path(int __client_index, CommandCode __command_code);
     void set_dev(int __dev_num);
     void set_out(const std::string& __out_name);
-    
 protected:
     uint32_t dev_num_;
     std::string out_name_{""};
@@ -25,11 +24,15 @@ protected:
     int tunnel_fifo_ = -1;
     pid_t pid_ = -1;
     std::string fifo_path_;
+    struct sockaddr_in tunnel_end_addr_;
+    socklen_t tunnel_end_addr_len_;
 
     int accept_tunnel_end();
     int create_epoll_fd(ScopedEpollFD& __epoll_fd);
     void write_fifo_error(const std::string& __msg);
+    int udp_handshake(void* __arg, int __len);
     virtual void spawn_window();
+    virtual void send_dev();
 };
 
 struct Tunnel {

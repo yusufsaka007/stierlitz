@@ -18,11 +18,13 @@ enum : CommandCode {
 };
 
 enum : Status {
-    ACCEPTED_OFFER   = 0x100,
-    REJECTED_OFFER   = 0x101,
-    EXEC_SUCCESS     = 0x102,
-    EXEC_ERROR       = 0x103,
-    PERMISSION_ERROR = 0X104 
+    ACCEPTED_OFFER                  = 0x100,
+    REJECTED_OFFER                  = 0x101,
+    EXEC_SUCCESS                    = 0x102,
+    EXEC_ERROR                      = 0x103,
+    PERMISSION_ERROR                = 0X104,
+    HEY_ATTACKER_PLEASE_DOMINATE_ME = 0X105,
+    UDP_ACK                         = 0X106
 };
 
 #define END_KEY "$^_end"

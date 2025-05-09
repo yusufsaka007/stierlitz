@@ -589,6 +589,7 @@ uint CommandHandler::find_open_port() {
 
         if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
             close(sockfd);
+            *p_event_log_ << LOG_MINOR_EVENTS << GREEN << "[CommandHandler::find_open_port] Found available port: " << port << RESET;
             return port;
         }
         close(sockfd);

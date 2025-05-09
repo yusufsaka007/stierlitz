@@ -10,7 +10,6 @@ public:
     void run() override;
 protected:
     void spawn_window() override;
-    
 };
 
 #endif // WEBCAM_RECORDER_HPP`

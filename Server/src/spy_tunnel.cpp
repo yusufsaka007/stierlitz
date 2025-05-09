@@ -37,16 +37,74 @@ int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutd
     return 0;
 }
 
+int SpyTunnel::udp_handshake(void* __arg, int __len) {
+    ScopedEpollFD epoll_fd;
+    int rc = create_epoll_fd(epoll_fd);
+    if (rc < 0) {
+        return -1;
+    }
+
+    struct epoll_event udp_event;
+    udp_event.data.fd = tunnel_socket_;
+    udp_event.events = EPOLLIN;
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_socket_, &udp_event)) {
+        return -1;
+    }
+
+    Status handshake;
+    memset(&tunnel_end_addr_, 0, sizeof(tunnel_end_addr_));
+    tunnel_end_addr_len_ = sizeof(tunnel_end_addr_);
+    rc = recvfrom(tunnel_socket_, &handshake, sizeof(Status), 0, (sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
+    if (rc < 0) {
+        return -1;
+    } else if (rc == 0) {
+        return -1;
+    }
+
+    struct epoll_event events[2];
+
+    // Send the device num and make sure it is received by the other side
+    while (true) {
+        sendto(tunnel_socket_, __arg, __len, 0, (sockaddr*) &tunnel_end_addr_, tunnel_end_addr_len_);
+       
+        int nfds = epoll_wait(epoll_fd.fd, events, 1, 5000);
+        if (nfds < 0) {
+            return -1;
+        } else if (nfds == 0) {
+            // Timeout occurred resemd the handshake
+            continue;
+        }
+
+        for (int i=0;i<nfds;i++) {
+            if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
+                // Shutdown 
+                uint64_t u;
+                recv(tunnel_shutdown_fd_.fd, &u, sizeof(u), 0);
+                return -1;
+            } else if (events[i].data.fd == tunnel_socket_) {
+                rc = recvfrom(tunnel_socket_, &handshake, sizeof(Status), 0, (sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
+                if (rc < 0) {
+                    return -1;
+                } else if (rc == 0) {
+                    return -1;
+                }
+                
+                if (rc > 0 && handshake == UDP_ACK) {
+                    epoll_ctl(epoll_fd.fd, EPOLL_CTL_DEL, tunnel_shutdown_fd_.fd, nullptr);
+                    epoll_ctl(epoll_fd.fd, EPOLL_CTL_DEL, tunnel_socket_, nullptr);
+                    return 0;
+                }
+            } 
+        }
+    }
+}
+
 void SpyTunnel::set_dev(int __dev_num) {
     dev_num_ = static_cast<uint32_t>(__dev_num);
 }
 
 void SpyTunnel::set_out(const std::string& __out_name) {
     out_name_ = __out_name;
-}
-
-void SpyTunnel::send_dev() {
-    send(tunnel_end_socket_, &dev_num_, sizeof(dev_num_), 0);
 }
 
 int SpyTunnel::accept_tunnel_end() {

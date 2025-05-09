@@ -11,6 +11,7 @@ public:
     std::atomic<bool> tunnel_shutdown_flag_ = false;
 protected:
     int tunnel_socket_;
+    struct sockaddr_in tunnel_addr_;
 };
 
 struct CLTunnel {
