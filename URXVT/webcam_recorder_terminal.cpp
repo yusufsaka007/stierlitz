@@ -1,4 +1,6 @@
+#include <opencv2/opencv.hpp>
 #include "tunnel_terminal_include.hpp"
+
 
 volatile bool shutdown_flag_ = false;
 
@@ -9,6 +11,10 @@ void handle_sigint(int) {
 int main(int argc, char* argv[]) {
     std::signal(SIGINT, handle_sigint);
     std::string fifo_name = argv[1];
+
+    int width = 160;
+    int height = 120;
+    int frame_size = width*height+4096;
 
     std::filesystem::create_directories("fifo");
     if (!std::filesystem::exists(fifo_name)) {
@@ -28,7 +34,7 @@ int main(int argc, char* argv[]) {
     std::cout << GREEN << "\n\n====================Listening For Frames====================\n\n" << MAGENTA;
 
     fd_set read_fds;
-    char buffer[1024];
+    char buffer[frame_size + 1];
 
     while (!shutdown_flag_) {
         FD_ZERO(&read_fds);
@@ -40,9 +46,20 @@ int main(int argc, char* argv[]) {
 
         int rc = select(fd + 1, &read_fds, nullptr, nullptr, &timeout);
         if (rc > 0 && FD_ISSET(fd, &read_fds)) {
-            ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+            ssize_t bytes_read = read(fd, buffer, frame_size);
+            std::cout << MAGENTA << "Bytes read: " << bytes_read << std::endl;
             if (bytes_read > 0) {
                 buffer[bytes_read] = '\0';
+                if (bytes_read > 254) {
+                    std::cout << GREEN << "Received frame size: " << bytes_read << RESET << std::endl;
+                    std::vector<unsigned char> jpeg_data(buffer, buffer+bytes_read);
+                    cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+                    if (img.empty()) {
+                        std::cout << RED << "Image is empty" << std::endl;                        
+                    }
+                    cv::imshow("Live", img);
+                    cv::waitKey(1);
+                }
                 std::string line(buffer);
                 if (line.find("[__end__]") != std::string::npos) {
                     std::cout << "\n" << MAGENTA << "[__end__]" << RESET << std::endl;;
@@ -51,8 +68,9 @@ int main(int argc, char* argv[]) {
                 if (line.find("[__error__]") != std::string::npos) {
                     std::cout << "\n" << RED << line << RESET << std::endl;
                     break;
-                } 
-                std::cout << GREEN << "\n" << line << RESET << std::endl;
+                }
+                
+
             } else {
                 std::cout << "\n" << RED << "Error occured while reading" << RESET << std::endl;
                 break;

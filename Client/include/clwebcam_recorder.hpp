@@ -23,7 +23,7 @@ protected:
     FrameBuffer buffers_[BUFFER_COUNT];
 
     int webcam_init();
-    int send_frame(unsigned int __index);
+    int send_frame(struct v4l2_buffer* __p_buf);
     void webcam_cleanup();
 };
 #endif // CLWEBCAM_RECORDER_HPP

@@ -3,6 +3,6 @@
 
 #include "cltunnel_include.hpp"
 
-bool send_out(int __fd, Status __status);
+int send_out(int __fd, Status __status, sockaddr* __p_tunnel_addr=nullptr, socklen_t* __p_tunnel_addr_len=nullptr);
 
 #endif // CLDATA_HANDLER_HPP

