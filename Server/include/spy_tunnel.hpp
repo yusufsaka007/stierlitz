@@ -27,12 +27,12 @@ protected:
     struct sockaddr_in tunnel_end_addr_;
     socklen_t tunnel_end_addr_len_;
 
+    virtual void exec_spy();
     int accept_tunnel_end();
     int create_epoll_fd(ScopedEpollFD& __epoll_fd);
     void write_fifo_error(const std::string& __msg);
     int udp_handshake(void* __arg, int __len);
     virtual void spawn_window();
-    virtual void send_dev();
 };
 
 struct Tunnel {

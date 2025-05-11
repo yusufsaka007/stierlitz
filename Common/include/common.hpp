@@ -43,4 +43,7 @@ enum : Status {
 
 #define BUFFER_SIZE 4096
 
+#define PIX_WIDTH 160
+#define PIX_HEIGHT 120
+
 #endif // COMMON_HPP

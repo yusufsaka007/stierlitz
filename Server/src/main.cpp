@@ -22,6 +22,8 @@ int main(int argc, char* argv[]) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
+    signal(SIGPIPE, SIG_IGN);
+
     if (argc == 3) {
         server = std::make_unique<Server>(argv[1], atoi(argv[2]), atoi(argv[5]));
     } else if (argc == 1) {

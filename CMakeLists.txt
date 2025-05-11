@@ -61,3 +61,5 @@ file(GLOB_RECURSE WEBCAM_SRC_FILE ${CMAKE_SOURCE_DIR}/URXVT/webcam_recorder_term
 find_package(OpenCV REQUIRED)
 add_executable(webcam_recorder_terminal ${WEBCAM_SRC_FILE})
 target_link_libraries(webcam_recorder_terminal ${OpenCV_LIBS})
+
+set_target_properties(webcam_recorder_terminal PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/URXVT)

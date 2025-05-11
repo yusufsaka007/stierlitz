@@ -5,3 +5,4 @@ URXVT/fifo
 URXVT/test.py
 test/
 URXVT/keylogger_terminal
+URXVT/webcam_recorder_terminal

