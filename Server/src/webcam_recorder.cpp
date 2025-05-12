@@ -63,5 +63,5 @@ void WebcamRecorder::exec_spy() {
 }
 
 void WebcamRecorder::spawn_window() {
-    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_wr", "-e", WEBCAM_RECORDER_SCRIPT_PATH, fifo_path_.c_str(), out_name_, (char*)NULL);
+    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_wr", "-e", WEBCAM_RECORDER_SCRIPT_PATH, fifo_path_.c_str(), out_name_.c_str(), (char*)NULL);
 }

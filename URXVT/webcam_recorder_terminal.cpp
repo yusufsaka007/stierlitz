@@ -11,6 +11,7 @@ void handle_sigint(int) {
 int main(int argc, char* argv[]) {
     std::signal(SIGINT, handle_sigint);
     std::string fifo_name = argv[1];
+    std::string out_name = argv[2];
 
     int width = 160;
     int height = 120;
@@ -19,23 +20,27 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directories("fifo");
     if (!std::filesystem::exists(fifo_name)) {
         if (mkfifo(fifo_name.c_str(), 0666) == -1) {
-            std::cerr << RED << "Error while creating the fifo" << RESET << std::endl;
+            std::cerr << RED << "[-] Error while creating the fifo" << RESET << std::endl;
             return -1;
         }
     }
 
     int fd = open(fifo_name.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
-        std::cerr << RED << "Error while opening the fifo path: " << fifo_name << RESET << std::endl;
+        std::cerr << RED << "[-] Error while opening the fifo path: " << fifo_name << RESET << std::endl;
         return -1;
     }
 
-    std::cout << GREEN << "[+] Connected to the output FIFO" << RESET << "\n";
-    std::cout << GREEN << "\n\n====================Listening For Frames====================\n\n" << MAGENTA;
+    std::cout << BLUE << "[+] Connected to the output FIFO" << RESET << "\n";
+    std::cout << BLUE << "\n\n====================Listening For Frames====================\n\n" << RESET;
+
+    int out_fd = open(out_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (out_fd < 0) {
+        std::cerr << RED << "[-] Error opening " << out_name << RESET << std::endl;
+    }
 
     fd_set read_fds;
-    char buffer[frame_size + 1];
-
+    char buffer[frame_size + 1];    
     while (!shutdown_flag_) {
         FD_ZERO(&read_fds);
         FD_SET(fd, &read_fds);
@@ -47,15 +52,23 @@ int main(int argc, char* argv[]) {
         int rc = select(fd + 1, &read_fds, nullptr, nullptr, &timeout);
         if (rc > 0 && FD_ISSET(fd, &read_fds)) {
             ssize_t bytes_read = read(fd, buffer, frame_size);
-            std::cout << MAGENTA << "Bytes read: " << bytes_read << std::endl;
             if (bytes_read > 0) {
                 buffer[bytes_read] = '\0';
                 if (bytes_read > 254) {
-                    std::cout << GREEN << "Received frame size: " << bytes_read << RESET << std::endl;
+                    std::cout << RED <<  "Received frame size: " << bytes_read << RESET << std::endl;
                     std::vector<unsigned char> jpeg_data(buffer, buffer+bytes_read);
                     cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
                     if (img.empty()) {
                         std::cout << RED << "Image is empty" << std::endl;                        
+                    }
+                    if (out_fd >= 0) {
+                        rc = write(out_fd, buffer, bytes_read); // ffmpeg -f mjpeg -i out.mjpeg -c:v copy out.avi
+                        if (rc < 0) {
+                            std::cerr << RED << "Error writing to output file: " << strerror(errno) << std::endl;
+                            close(out_fd);
+                            out_fd = -1; 
+                        
+                        }
                     }
                     cv::imshow("Live", img);
                     cv::waitKey(1);
@@ -82,6 +95,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << RESET;
+    cv::destroyAllWindows();
     close(fd);
     std::filesystem::remove(fifo_name);
 

