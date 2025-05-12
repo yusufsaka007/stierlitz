@@ -31,13 +31,18 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
+    int out_fd = -1;
+    if (!out_name.empty()) {
+        open(out_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (out_fd < 0) {
+            std::cerr << RED << "[-] Error opening " << out_name << RESET << std::endl;
+        }
+    }
+
     std::cout << BLUE << "[+] Connected to the output FIFO" << RESET << "\n";
     std::cout << BLUE << "\n\n====================Listening For Frames====================\n\n" << RESET;
 
-    int out_fd = open(out_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (out_fd < 0) {
-        std::cerr << RED << "[-] Error opening " << out_name << RESET << std::endl;
-    }
+    
 
     fd_set read_fds;
     char buffer[frame_size + 1];    
