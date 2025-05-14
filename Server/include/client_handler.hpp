@@ -22,7 +22,7 @@ public:
     int index() const;
 private:
     void set_values();
-    int socket_;
+    int socket_ = -1;
     std::string ip_;
     struct sockaddr_in addr_;
     socklen_t addr_len_;

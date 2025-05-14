@@ -13,6 +13,9 @@ ClientHandler::ClientHandler() {
 }
 
 int ClientHandler::is_client_up(const int __fd) {
+    if (__fd < 0) {
+        return -1;
+    }
     char buf;
     int rc = recv(__fd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
 
