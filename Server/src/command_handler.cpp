@@ -274,7 +274,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
 
     if (temp_arg_map.find(INDEX_ARG) != temp_arg_map.end()) {
         int index_value = std::any_cast<int>(temp_arg_map[INDEX_ARG]);
-        if (index_value < 0 || p_clients_->at(index_value) == nullptr || ClientHandler::is_client_up(p_clients_->at(index_value)->socket())) {
+        if (index_value < 0 || index_value >= p_clients_->size() || p_clients_->at(index_value) == nullptr || ClientHandler::is_client_up(p_clients_->at(index_value)->socket())) {
             *p_event_log_ << LOG_MUST << RED << "Client is not up or invalid client index: " << index_value << RESET_C2_FIFO;
             return -1;
         }

