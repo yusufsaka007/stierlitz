@@ -39,6 +39,7 @@ void data_handler(int __out_fifo) {
 
         if (FD_ISSET(__out_fifo, &read_fds)) {
             bytes_read = read(__out_fifo, buffer, sizeof(buffer));
+            std::cout << MAGENTA << "Data available for read:" <<  bytes_read << RESET << std::endl;
             if (bytes_read < 0) {
                 std::cerr << RED << "Error reading from FIFO" << RESET << std::endl;
                 break;
@@ -55,7 +56,7 @@ void data_handler(int __out_fifo) {
                     std::cout << YELLOW << shell_str << RESET << std::flush;
                     continue;
                 }
-                if (bytes_read == res_update_key_len + 8  && strncmp(buffer + (bytes_read-res_update_key_len), res_update_key, res_update_key_len) == 0) {
+                if (bytes_read >= res_update_key_len + 8  && strncmp(buffer + (bytes_read-res_update_key_len), res_update_key, res_update_key_len) == 0) {
                     // Resolution update received.
                     uint32_t temp_width = 0, temp_height = 0;
 
@@ -147,6 +148,7 @@ int main(int argc, char* argv[]) {
     std::cout << YELLOW << shell_str;
     while (!shutdown_flag.load()) {
         std::getline(std::cin, test_input);
+        std::cout << MAGENTA << "Command is " << test_input << RESET << std::endl;
         write(fifo_in, test_input.c_str(), test_input.size());
         
         if (strncmp(test_input.c_str(), "exit", 4) == 0) {

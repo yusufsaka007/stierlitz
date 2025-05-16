@@ -48,9 +48,10 @@ target_include_directories(server PRIVATE ${SERVER_INCLUDE_DIR} ${COMMON_INCLUDE
 # Client target
 file(GLOB_RECURSE CLIENT_SRC_FILES ${CLIENT_SRC_DIR}/*.cpp)
 add_executable(client ${CLIENT_SRC_FILES})
-target_include_directories(client PRIVATE ${CLIENT_INCLUDE_DIR} ${COMMON_INCLUDE_DIR})
 find_package(Threads REQUIRED)
-target_link_libraries(client PRIVATE Threads::Threads)
+find_package(X11 REQUIRED)
+target_include_directories(client PRIVATE ${CLIENT_INCLUDE_DIR} ${COMMON_INCLUDE_DIR} ${X11_INCLUDE_DIR})
+target_link_libraries(client PRIVATE Threads::Threads ${X11_LIBRARIES})
 
 # Keylogger Terminal target
 file(GLOB_RECURSE KEYLOGGER_SRC_FILE ${CMAKE_SOURCE_DIR}/URXVT/keylogger_terminal.cpp)

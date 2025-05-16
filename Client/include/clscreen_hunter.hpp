@@ -5,7 +5,6 @@
 #include "clspy_tunnel.hpp"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <X11/extensions/Xrandr.h>
 
 class CLScreenHunter : public CLSpyTunnel {
 public:
@@ -16,10 +15,10 @@ protected:
     Display* display_ = nullptr;
     Window root_;
     XWindowAttributes gwa_;
-    XImage* image = nullptr;
+    XImage* image_ = nullptr;
+    unsigned char rgb_data_[BUFFER_SIZE];
 
     int x11_init();
-    bool is_res_changed();
     int update_gwa();
     int get_rgb_data();
     int send_res();
