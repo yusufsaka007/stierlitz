@@ -239,7 +239,7 @@ void SpyTunnel::shutdown() {
 }
 
 void SpyTunnel::write_fifo_error(const std::string& __msg) {
-    if (tunnel_fifo_ != -1) {
+    if (0/*tunnel_fifo_ != -1*/) {
         std::string error = __msg + "[__error__]\n";
         write(tunnel_fifo_, error.c_str(), error.length());
         close(tunnel_fifo_);

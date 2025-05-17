@@ -15,6 +15,20 @@ int end_key_len;
 char res_update_key[16];
 int res_update_key_len;
 
+int fifo_in = -1;
+int fifo_out = -1;
+
+void cleanup() {
+    if (fifo_in != -1) {
+        close(fifo_in);
+        fifo_in = -1;
+    }
+    if (fifo_out != -1) {
+        close(fifo_out);
+        fifo_out = -1;
+    }
+}
+
 void data_handler(int __out_fifo) {
     fd_set read_fds;
     char buffer[buffer_size + 1] = {0};
@@ -48,7 +62,7 @@ void data_handler(int __out_fifo) {
                 break;
             } else {
                 buffer[bytes_read] = '\0';
-                std::cout << "\33[2K\r";
+                
                 if (bytes_read >= end_key_len && strncmp(buffer + (bytes_read-end_key_len), end_key, end_key_len) == 0) {
                     // Frame received. Will be handled here
                     printf("Frame received with size %d\n", bytes_read);
@@ -87,6 +101,8 @@ void data_handler(int __out_fifo) {
             }
         }
     }
+
+    cleanup();
 }
 
 int main(int argc, char* argv[]) {
@@ -117,7 +133,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Open the output fifo first
-    int fifo_out = open(fifo_name.c_str(), O_RDONLY);
+    fifo_out = open(fifo_name.c_str(), O_RDONLY | O_NONBLOCK);
     if (fifo_out < 0) {
         std::cerr << RED << "Error while opening the fifo path: " << fifo_name << RESET << std::endl;
         return -1;
@@ -125,7 +141,6 @@ int main(int argc, char* argv[]) {
 
     // Open the input fifo
     int tries = 0;
-    int fifo_in = -1;
     while ((fifo_in = open(fifo_in_name.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries <= 20) {
         std::cout << YELLOW << "Waiting for read end to connect..." << RESET;
         sleep(1);
@@ -145,10 +160,13 @@ int main(int argc, char* argv[]) {
     // Test 
     std::string test_input = "";
     char buffer[1024];
-    std::cout << YELLOW << shell_str;
     while (!shutdown_flag.load()) {
+        std::cout << YELLOW << shell_str;
         std::getline(std::cin, test_input);
-        std::cout << MAGENTA << "Command is " << test_input << RESET << std::endl;
+        if (fifo_in == -1) {
+            break;
+        }
+
         write(fifo_in, test_input.c_str(), test_input.size());
         
         if (strncmp(test_input.c_str(), "exit", 4) == 0) {
@@ -161,8 +179,10 @@ int main(int argc, char* argv[]) {
         reader.join();
     }
 
-    close(fifo_in);
-    close(fifo_out);
+
+    std::cout << MAGENTA << "Code finished" << std::endl;
+
+    cleanup();
 
     return 0;
 }

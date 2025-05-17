@@ -4,6 +4,8 @@ void* cltunnel_helper(void* arg) {
     CLTunnel* tunnel = static_cast<CLTunnel*>(arg);
     tunnel->clspy_tunnel_->run();
 
+    printf("WTFFFFFFFFF\n");
+
     // Cleanup
     delete tunnel->clspy_tunnel_;
     tunnel->clspy_tunnel_ = nullptr;
