@@ -16,11 +16,13 @@ protected:
     Window root_;
     XWindowAttributes gwa_;
     XImage* image_ = nullptr;
-    unsigned char rgb_data_[BUFFER_SIZE];
+    unsigned char* rgb_data_ = nullptr;
+    size_t rgb_data_size_ = 0;
 
     int x11_init();
     int update_gwa();
     int get_rgb_data();
+    void resize_rgb_data();
     int send_res();
     int send_rgb_data();
     void x11_cleanup();

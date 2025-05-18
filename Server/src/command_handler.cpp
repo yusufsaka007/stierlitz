@@ -432,17 +432,21 @@ void CommandHandler::list() {
             } else {
                 *p_event_log_ << RED << "DOWN\033[0m";
             }
-            *p_event_log_ << CYAN << "\nTunnels:\n";
-            for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
-                if ((*it)->client_index_ == i) {
-                    if ((*it)->command_code_ == KEYLOGGER) {
-                        *p_event_log_ << "\n__keylogger__:";
-                    } else if ((*it)->command_code_ == WEBCAM_RECORDER) {
-                        *p_event_log_ << "\n__webcam_recorder__:";
-                    } else if ((*it)->command_code_ == AUDIO_RECORDER) {
-                        *p_event_log_ << "\n__audio_recorder__:";
-                    } else if ((*it)->command_code_ == SCREEN_HUNTER) {
-                        *p_event_log_ << "\nscreen__recorder__:";
+            *p_event_log_ << CYAN << "\nTunnels:";
+            if (p_tunnels_->empty()) {
+                *p_event_log_ << RED << " None";
+            } else {
+                for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
+                    if ((*it)->client_index_ == i) {
+                        if ((*it)->command_code_ == KEYLOGGER) {
+                            *p_event_log_ << "\n__keylogger__";
+                        } else if ((*it)->command_code_ == WEBCAM_RECORDER) {
+                            *p_event_log_ << "\n__webcam_recorder__";
+                        } else if ((*it)->command_code_ == AUDIO_RECORDER) {
+                            *p_event_log_ << "\n__audio_recorder__";
+                        } else if ((*it)->command_code_ == SCREEN_HUNTER) {
+                            *p_event_log_ << "\nscreen__recorder__";
+                        }
                     }
                 }
             }

@@ -16,6 +16,8 @@ int CLScreenHunter::x11_init() {
     width_ = gwa_.width;
     height_ = gwa_.height;
 
+    resize_rgb_data();
+
     if (send_res() < 0) {
         return -1;
     }
@@ -64,13 +66,16 @@ void CLScreenHunter::run() {
                 printf("[CLScreenHunter] ss received\n");
                 if (update_gwa() != 0) {
                     // Resolution is changed, send the new one
-                    send_res();
+                    if (send_res() < 0) {
+                        break;
+                    }
+                    resize_rgb_data(); // Update the buffer
                 }
                 if (send_rgb_data() < 0) {
                     break;
                 }
             } else {
-                printf("[CLScreenHunter] Wtf is received%s\n", command);
+                printf("[CLScreenHunter] Wtf is received %s\n", command);
             }
         }
     }
@@ -106,16 +111,44 @@ int CLScreenHunter::send_res() {
     return 0;
 }
 
-int CLScreenHunter::send_rgb_data() {
-    memset(rgb_data_, 0, 16);
-    memcpy(rgb_data_ + 16, END_KEY, END_KEY_LEN);
+void CLScreenHunter::resize_rgb_data() {
+    rgb_data_size_ = (width_ * height_ * 3);
+    rgb_data_ = (unsigned char*)realloc(rgb_data_, rgb_data_size_ + END_KEY_LEN);
+}
 
-    if (send(tunnel_socket_, rgb_data_, 16+END_KEY_LEN, 0) <= 0) {
+int CLScreenHunter::send_rgb_data() {
+    memcpy(rgb_data_ + rgb_data_size_, END_KEY, END_KEY_LEN);
+
+    if (send(tunnel_socket_, rgb_data_, sizeof(rgb_data_), 0) <= 0) {
         printf("[CLScreenHunter] Error occured while sending rgb data\n");
         return -1;
     }
 
+    printf("Sent %ld\n", sizeof(rgb_data_));
+
     return 0;
+}
+
+int CLScreenHunter::get_rgb_data() {
+    image_ = XGetImage(display_, root_, 0, 0, width_, height_, AllPlanes, ZPixmap);
+    if (!image_) {
+        printf("[CLScreenHunter] failed to get image\n");
+        return -1;
+    }
+    for (int y=0;y<image_->height;y++) {
+        for (int x=0;x<image_->width;x++) {
+            unsigned long pixel = XGetPixel(image_, x, y);
+            unsigned char b = (pixel & 0xFF);
+            unsigned char g = (pixel & 0xFF00) >> 8;
+            unsigned char r = (pixel & 0xFF0000) >> 16;
+            int i = (y * image_->width + x) * 3;
+            
+            rgb_data_[i + 0] = r;
+            rgb_data_[i + 1] = g;
+            rgb_data_[i + 2] = b;
+        }
+    }
+    
 }
 
 void CLScreenHunter::x11_cleanup() {
@@ -125,5 +158,9 @@ void CLScreenHunter::x11_cleanup() {
 
     if (display_ != nullptr) {
         XCloseDisplay(display_);
+    }
+
+    if (rgb_data_ != nullptr) {
+        free(rgb_data_);
     }
 }

