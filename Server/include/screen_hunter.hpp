@@ -14,9 +14,11 @@ protected:
 
     std::string fifo_in_;
     std::string fifo_data_;
+    std::string fifo_data_in_;
 
     int tunnel_fifo_in_ = -1;
     int tunnel_fifo_data_ = -1;
+    int tunnel_fifo_data_in_ = -1;
 };
 
 #endif // SCREEN_HUNTER_HPP

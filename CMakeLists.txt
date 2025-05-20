@@ -22,7 +22,7 @@ set(KEYLOGGER_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/keylogger_fifo)
 set(WEBCAM_RECORDER_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/webcam_recorder_terminal)
 set(WEBCAM_RECORDER_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/webcam_recorder_fifo)
 set(SCREEN_HUNTER_SCRIPT_PATH ${CMAKE_SOURCE_DIR}/URXVT/screen_hunter_terminal)
-set(SCREEN_HUNTER_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/screen_hunter_fifo)
+set(SCREEN_HUNTER_FIFO_PATH ${CMAKE_SOURCE_DIR}/URXVT/fifo/screen_hunter_fifo)
 
 find_package(OpenCV REQUIRED)
 

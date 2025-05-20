@@ -65,12 +65,17 @@ void CLScreenHunter::run() {
             } else if (strncmp(command, "ss", 2) == 0) {
                 printf("[CLScreenHunter] ss received\n");
                 if (update_gwa() != 0) {
-                    // Resolution is changed, send the new one
+                    printf("Res changed\n"); // Resolution is changed, send the new one                    
                     if (send_res() < 0) {
                         break;
                     }
                     resize_rgb_data(); // Update the buffer
                 }
+
+                if (get_rgb_data() < 0) {
+                    break;
+                }
+
                 if (send_rgb_data() < 0) {
                     break;
                 }
@@ -108,23 +113,25 @@ int CLScreenHunter::send_res() {
         return -1;
     }
 
+    printf("Sent %ld\n", sizeof(res_data));
+
     return 0;
 }
 
 void CLScreenHunter::resize_rgb_data() {
-    rgb_data_size_ = (width_ * height_ * 3);
-    rgb_data_ = (unsigned char*)realloc(rgb_data_, rgb_data_size_ + END_KEY_LEN);
+    rgb_data_size_ = (width_ * height_ * 3) + END_KEY_LEN;
+    rgb_data_ = (unsigned char*)realloc(rgb_data_, rgb_data_size_);
 }
 
 int CLScreenHunter::send_rgb_data() {
-    memcpy(rgb_data_ + rgb_data_size_, END_KEY, END_KEY_LEN);
+    memcpy(rgb_data_ + (rgb_data_size_ - END_KEY_LEN), END_KEY, END_KEY_LEN);
 
-    if (send(tunnel_socket_, rgb_data_, sizeof(rgb_data_), 0) <= 0) {
+    if (send(tunnel_socket_, rgb_data_, rgb_data_size_, 0) <= 0) {
         printf("[CLScreenHunter] Error occured while sending rgb data\n");
         return -1;
     }
 
-    printf("Sent %ld\n", sizeof(rgb_data_));
+    printf("Sent %ld\n", rgb_data_size_);
 
     return 0;
 }
@@ -148,7 +155,7 @@ int CLScreenHunter::get_rgb_data() {
             rgb_data_[i + 2] = b;
         }
     }
-    
+    return 0;
 }
 
 void CLScreenHunter::x11_cleanup() {

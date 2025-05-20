@@ -49,5 +49,6 @@ rm "$XRES_TEMP"
 
 # Merge updated settings
 xrdb -merge "$XRES"
+xrdb -load "$XRES"
 
 echo -e "\n[✔] URXVT profiles added or updated successfully."

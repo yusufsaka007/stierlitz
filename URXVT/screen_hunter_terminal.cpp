@@ -19,6 +19,7 @@ int res_update_key_len;
 int fifo_in = -1;
 int fifo_out = -1;
 int fifo_data = -1;
+int fifo_data_in = -1;
 
 unsigned char* rgb_data = nullptr;
 int rgb_data_size;
@@ -38,24 +39,28 @@ void cleanup() {
         close(fifo_data);
         fifo_data = -1;
     }
+    if (fifo_data_in != -1) {
+        close(fifo_data_in);
+        fifo_data = -1;
+    }
     if (rgb_data) {
         delete[] rgb_data;
     }
 }
 
-void handle_control(int __out_fifo) {
+void handle_control() {
     fd_set read_fds;
     char buffer[BUFFER_SIZE + 1] = {0};
     size_t bytes_read = 0;
     while(!shutdown_flag.load()) {
         FD_ZERO(&read_fds);
-        FD_SET(__out_fifo, &read_fds);
+        FD_SET(fifo_out, &read_fds);
 
         struct timeval timeout;
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
         
-        int rc = select(__out_fifo + 1, &read_fds, nullptr, nullptr, &timeout);
+        int rc = select(fifo_out + 1, &read_fds, nullptr, nullptr, &timeout);
         if (rc < 0) {
             std::cerr << RED << "[handle_control] Error in select()" << RESET << std::endl;
             shutdown_flag.store(true);
@@ -65,9 +70,8 @@ void handle_control(int __out_fifo) {
             continue;
         }
 
-        if (FD_ISSET(__out_fifo, &read_fds)) {
-            bytes_read = read(__out_fifo, buffer, sizeof(buffer));
-            std::cout << MAGENTA << "[handle_control] Data available for read:" <<  bytes_read << RESET << std::endl;
+        if (FD_ISSET(fifo_out, &read_fds)) {
+            bytes_read = read(fifo_out, buffer, sizeof(buffer));
             if (bytes_read < 0) {
                 std::cerr << RED << "[handle_control] Error reading from FIFO" << RESET << std::endl;
                 break;
@@ -88,7 +92,7 @@ void handle_control(int __out_fifo) {
                         height = temp_height;
                         rgb_data_size = width * height * 3 + end_key_len;
                         delete[] rgb_data;
-                        rgb_data = new unsigned char(rgb_data_size);
+                        rgb_data = new unsigned char[rgb_data_size];
                         printf("Resolution updated: %dx%d\n", width, height);
                     } else {
                         printf("Corrupted data received during resolution check\n\twidth=%d\n\theight=%d\n",temp_width, temp_height);
@@ -115,19 +119,19 @@ void handle_control(int __out_fifo) {
     }
 }
 
-void handle_data(int __data_fifo) {
+void handle_data() {
     fd_set data_fds;
     rgb_data = new unsigned char[width * height * 3 + end_key_len];
     
     while (!shutdown_flag.load()) {
         FD_ZERO(&data_fds);
-        FD_SET(__data_fifo, &data_fds);
+        FD_SET(fifo_data, &data_fds);
 
         struct timeval timeout;
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
 
-        int rc = select(__data_fifo + 1, &data_fds, nullptr, nullptr, &timeout);
+        int rc = select(fifo_data + 1, &data_fds, nullptr, nullptr, &timeout);
         if (rc < 0) {
             std::cerr << RED << "[handle_data] Error in select()" << RESET << std::endl;
             shutdown_flag.store(true);
@@ -137,28 +141,43 @@ void handle_data(int __data_fifo) {
             continue;
         }
 
-        if (FD_ISSET(__data_fifo, &data_fds)) {
+        if (FD_ISSET(fifo_data, &data_fds)) {
             size_t total_read = 0;
+            uint16_t c = 1;
             while (!shutdown_flag.load() && total_read < rgb_data_size) {
-                size_t bytes_read = read(__data_fifo, rgb_data + total_read, rgb_data_size - total_read);
+                ssize_t bytes_read = read(fifo_data, rgb_data + total_read, rgb_data_size - total_read);
                 if (bytes_read < 0) {
-                    std::cerr << RED << "[handle_data] Error reading from FIFO" << RESET << std::endl;
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        continue;
+                    }
+                    std::cerr << RED << "[handle_data] Error reading from FIFO: " << strerror(errno) << RESET << std::endl;
                     break;
                 } else if (bytes_read == 0) {
                     std::cout << YELLOW << "[handle_data] FIFO closed by writer" << RESET << std::endl;
                     break;
                 } else {
-                    std::cout << GREEN << "[handle_data] Received segment size: " << bytes_read << std::endl;
+                    std::cout << GREEN << "[handle_data] Received segment size: " << bytes_read << RESET << std::endl;
                     total_read += bytes_read;
                 }
+                write(fifo_data_in, &c, sizeof(c));
             }
+
+            c = 0;
+            int wrc = write(fifo_data_in, &c, sizeof(c));
+            if (wrc != sizeof(c)) {
+                std::cerr << RED << "[handle_data] Failed to write c=0 to fifo_data_in: " << strerror(errno) << RESET << std::endl;
+            }
+
+            std::cout << MAGENTA << "Total received: " << total_read << RESET << std::endl; 
 
             if (total_read == rgb_data_size && memcmp(rgb_data + (rgb_data_size - end_key_len), end_key, end_key_len) == 0) {
                 std::cout << GREEN << "[handle_data] RGB data complete. Starting with appropriate functions" << std::endl;
             } else {
-                std::cout << RED << "[handle_data] Corrupted RGB data received" << std::endl;
+                std::cout << RED << "[handle_data] Corrupted RGB data received" << RESET << std::endl;    
             }
         }
+
+        std::cout << YELLOW << shell_str << RESET << std::flush;
     }
 
     {
@@ -170,6 +189,7 @@ int main(int argc, char* argv[]) {
     std::string fifo_name = argv[1]; // Control fifo READ_ONLY
     std::string fifo_in_name = fifo_name + (std::string) "_in"; // Command fifo WRITE_ONLY
     std::string fifo_data_name = fifo_name + (std::string) "_data"; // Data fifo
+    std::string fifo_data_in_name = fifo_data_name + (std::string) "_in";
 
     end_key_len = std::stoi(argv[3]);
     strncpy(end_key, argv[2], end_key_len);
@@ -187,8 +207,22 @@ int main(int argc, char* argv[]) {
         }
     }
 
+     if (!std::filesystem::exists(fifo_data_name)) {
+        if (mkfifo(fifo_data_name.c_str(), 0666) == -1) {
+            std::cerr << RED << "Error while creating the fifo" << RESET << std::endl;
+            return -1;
+        }
+    }
+
     if (!std::filesystem::exists(fifo_name)) {
         if (mkfifo(fifo_name.c_str(), 0666) == -1) {
+            std::cerr << RED << "Error while creating the fifo" << RESET << std::endl;
+            return -1;
+        }
+    }
+
+    if (!std::filesystem::exists(fifo_data_in_name)) {
+        if (mkfifo(fifo_data_in_name.c_str(), 0666) == -1) {
             std::cerr << RED << "Error while creating the fifo" << RESET << std::endl;
             return -1;
         }
@@ -207,14 +241,23 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     
-    // Open the input fifo
+    // Open the write only fifos
     int tries = 0;
-    while ((fifo_in = open(fifo_in_name.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries <= 20) {
+    while ((fifo_in = open(fifo_in_name.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ <= 20) {
         std::cout << YELLOW << "Waiting for read end to connect..." << RESET;
         sleep(1);
     }
-
     if (fifo_in == -1) {
+        std::cerr << RED << "Error opening input FIFO file" << RESET;
+        return -1;
+    }
+
+    tries = 0;
+    while ((fifo_data_in = open(fifo_data_in_name.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ <= 20) {
+        std::cout << YELLOW << "Waiting for read end to connect..." << RESET;
+        sleep(1);
+    }
+    if (fifo_data_in == -1) {
         std::cerr << RED << "Error opening input FIFO file" << RESET;
         return -1;
     }
@@ -223,8 +266,8 @@ int main(int argc, char* argv[]) {
     std::cout << GREEN << "[+] FIFOs Connected" << RESET << "\n";
     std::cout << GREEN << "\n\n====================Welcome to Screen Hunter====================\ntype help to see available commands\n" << RESET;
 
-    std::thread control_handler(handle_control, fifo_out);
-    std::thread data_handler(handle_data, fifo_data);
+    std::thread control_handler(handle_control);
+    std::thread data_handler(handle_data);
 
     // Test 
     std::string test_input = "";
@@ -258,6 +301,10 @@ int main(int argc, char* argv[]) {
         std::lock_guard<std::mutex> lock(cleanup_mutex);
         cleanup();
     }
+
+    std::filesystem::remove(fifo_in_name);
+    std::filesystem::remove(fifo_data_name);
+    std::filesystem::remove(fifo_name);
 
     return 0;
 }

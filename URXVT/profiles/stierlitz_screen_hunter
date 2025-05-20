@@ -1,8 +1,6 @@
 stierlitz_screen_hunter*foreground: #E5FF00
-stierlitz_screen_hunter*background: #C40909
+stierlitz_screen_hunter*background: #17202a  
 stierlitz_screen_hunter*font: xft:Monospace:pixelsize=14
 stierlitz_screen_hunter*cursorColor: #F7FFAD
 stierlitz_screen_hunter*saveLines: 10
 stierlitz_screen_hunter*inheritPixmap: false
-stierlitz_screen_hunter*transparent : true
-stierlitz_screen_hunter*shading: 60
