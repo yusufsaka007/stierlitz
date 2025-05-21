@@ -57,8 +57,8 @@ void handle_control() {
         FD_SET(fifo_out, &read_fds);
 
         struct timeval timeout;
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000;
         
         int rc = select(fifo_out + 1, &read_fds, nullptr, nullptr, &timeout);
         if (rc < 0) {
@@ -144,6 +144,8 @@ void handle_data() {
         if (FD_ISSET(fifo_data, &data_fds)) {
             size_t total_read = 0;
             uint16_t c = 1;
+            int ccounter = 0;
+            int wrc;
             while (!shutdown_flag.load() && total_read < rgb_data_size) {
                 ssize_t bytes_read = read(fifo_data, rgb_data + total_read, rgb_data_size - total_read);
                 if (bytes_read < 0) {
@@ -156,22 +158,30 @@ void handle_data() {
                     std::cout << YELLOW << "[handle_data] FIFO closed by writer" << RESET << std::endl;
                     break;
                 } else {
-                    std::cout << GREEN << "[handle_data] Received segment size: " << bytes_read << RESET << std::endl;
+                    //std::cout << GREEN << "[handle_data] Received segment size: " << bytes_read << RESET << std::endl;
                     total_read += bytes_read;
                 }
-                write(fifo_data_in, &c, sizeof(c));
+                wrc = write(fifo_data_in, &c, sizeof(c));
+                if (wrc != sizeof(c)) {
+                    std::cerr << RED << "[handle_data] Failed to write c=1 to fifo_data_in: " << strerror(errno) << RESET << std::endl;
+                } else {
+                    c++;
+                    ccounter++;
+                }
             }
 
             c = 0;
-            int wrc = write(fifo_data_in, &c, sizeof(c));
+            wrc = write(fifo_data_in, &c, sizeof(c));
             if (wrc != sizeof(c)) {
                 std::cerr << RED << "[handle_data] Failed to write c=0 to fifo_data_in: " << strerror(errno) << RESET << std::endl;
+            } else {
+                ccounter++;
             }
 
             std::cout << MAGENTA << "Total received: " << total_read << RESET << std::endl; 
 
             if (total_read == rgb_data_size && memcmp(rgb_data + (rgb_data_size - end_key_len), end_key, end_key_len) == 0) {
-                std::cout << GREEN << "[handle_data] RGB data complete. Starting with appropriate functions" << std::endl;
+                std::cout << GREEN << "[handle_data] RGB data complete. Starting with appropriate functions. Counter: " << ccounter << std::endl;
             } else {
                 std::cout << RED << "[handle_data] Corrupted RGB data received" << RESET << std::endl;    
             }
@@ -235,7 +245,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    fifo_data = open(fifo_data_name.c_str(), O_RDONLY | O_NONBLOCK);
+    fifo_data = open(fifo_data_name.c_str(), O_RDONLY);
     if (fifo_out < 0) {
         std::cerr << RED << "Error while opening the fifo path: " << fifo_name << RESET << std::endl;
         return -1;
@@ -253,7 +263,7 @@ int main(int argc, char* argv[]) {
     }
 
     tries = 0;
-    while ((fifo_data_in = open(fifo_data_in_name.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ <= 20) {
+    while ((fifo_data_in = open(fifo_data_in_name.c_str(), O_WRONLY)) == -1 && tries++ <= 20) {
         std::cout << YELLOW << "Waiting for read end to connect..." << RESET;
         sleep(1);
     }
