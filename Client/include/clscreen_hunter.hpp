@@ -18,9 +18,11 @@ protected:
     XImage* image_ = nullptr;
     unsigned char* rgb_data_ = nullptr;
     size_t rgb_data_size_ = 0;
+    float fps_;
+    long sleep_usec;
 
     int x11_init();
-    int update_gwa();
+    void update_gwa();
     int get_rgb_data();
     void resize_rgb_data();
     int send_res();

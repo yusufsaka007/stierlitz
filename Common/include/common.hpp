@@ -45,7 +45,7 @@ enum : Status {
 #define TUNNEL_NUMS 5
 
 #define BUFFER_SIZE 4096
-#define RGB_BUFFER_SIZE 207360
+#define RGB_BUFFER_SIZE 10240
 
 #define PIX_WIDTH 160
 #define PIX_HEIGHT 120
