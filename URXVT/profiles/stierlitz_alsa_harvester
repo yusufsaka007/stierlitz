@@ -1,0 +1,4 @@
+stierlitz_alsa_harvester*foreground: #FFFFFF
+stierlitz_alsa_harvester*background: #002866
+stierlitz_alsa_harvester*font: xft:Monospace:pixelsize=16
+stierlitz_alsa_harvester*inheritPixmap: false

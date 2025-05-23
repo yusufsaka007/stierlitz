@@ -20,7 +20,7 @@ void WebcamRecorder::exec_spy() {
         return;
     } 
 
-    char frame[PIX_HEIGHT * PIX_WIDTH + BUFFER_SIZE];
+    char frame[PIX_HEIGHT * PIX_WIDTH + BUFFER_SIZE]; // Additional to be sure
     struct epoll_event events[2];
     while (true) {
         int nfds = epoll_wait(epoll_fd.fd, events, 2, -1);

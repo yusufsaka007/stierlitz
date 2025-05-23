@@ -4,7 +4,7 @@ void* cltunnel_helper(void* arg) {
     CLTunnel* tunnel = static_cast<CLTunnel*>(arg);
     tunnel->clspy_tunnel_->run();
 
-    printf("WTFFFFFFFFF\n");
+    printf("[cltunnel_helper] Thread finished\n");
 
     // Cleanup
     delete tunnel->clspy_tunnel_;
@@ -65,13 +65,12 @@ int CLSpyTunnel::udp_handshake() {
 
     handshake = UDP_ACK;
     while (true) {
-        int rc = recvfrom(tunnel_socket_, argv_, BUFFER_SIZE, 0, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
-        printf("[udp_handshake] Received: %d\n", *reinterpret_cast<uint32_t*>(argv_));
-        if (rc <= 0) {
+        argv_size_ = recvfrom(tunnel_socket_, argv_, BUFFER_SIZE, 0, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
+        if (argv_size_ <= 0) {
             printf("[udp_handshake] Error while receiving the argument from server\n");
             return -1;
         }
-        rc = sendto(tunnel_socket_, &handshake, sizeof(Status), 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_);
+        int rc = sendto(tunnel_socket_, &handshake, sizeof(Status), 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_);
         if (rc <= 0) {
             printf("[udp_handshake] Error while sending ACK\n");
             return -1;

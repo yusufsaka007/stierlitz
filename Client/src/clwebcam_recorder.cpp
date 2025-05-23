@@ -4,7 +4,6 @@
 
 void CLWebcamRecorder::run() {
     // Convert device number
-    char* endptr = nullptr;
     errno = 0;
     memcpy(&device_num_, argv_, sizeof(uint32_t));
 

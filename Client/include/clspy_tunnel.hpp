@@ -16,6 +16,7 @@ protected:
     struct sockaddr_in tunnel_addr_;
     socklen_t tunnel_addr_len_ = 0;
     char argv_[BUFFER_SIZE];
+    int argv_size_;
 };
 
 struct CLTunnel {

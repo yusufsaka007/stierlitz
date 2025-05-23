@@ -12,7 +12,7 @@ enum : CommandCode {
     KILL            = 0b00000010,
     KEYLOGGER       = 0b00000100,
     WEBCAM_RECORDER = 0b00001000,
-    AUDIO_RECORDER  = 0b00010000,
+    ALSA_HARVESTER  = 0b00010000,
     SCREEN_HUNTER   = 0b00100000,
     PACKET_TUNNEL   = 0b01000000,
 };
@@ -49,5 +49,8 @@ enum : Status {
 
 #define PIX_WIDTH 160
 #define PIX_HEIGHT 120
+
+#define BUFFER_FRAMES 128
+#define SAMPLE_RATE 44100 // 44.1kHz
 
 #endif // COMMON_HPP
