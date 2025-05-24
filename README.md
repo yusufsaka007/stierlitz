@@ -164,7 +164,6 @@ To change:
 
 ---
 
-````markdown
 # Contributing and Issue Reporting Guidelines
 
 Thank you for taking the time to contribute to our project! Whether you’re submitting a bug report, suggesting improvements, or contributing code, your help is higly appreciated.
@@ -173,14 +172,14 @@ Thank you for taking the time to contribute to our project! Whether you’re sub
 
 ## Contributing
 
-I welcome contributions from everyone. Please follow these steps to contribute code:
+Contributions from anybody is welcomed. Please follow these steps to contribute code:
 
 ### 1. Fork and Clone the Repository
 - **Fork:** Click the "Fork" button at the top right of the repository page.
 - **Clone:** Clone your fork locally:
   ```bash
     git clone https://github.com/yusufsaka007/stierlitz.git
-````
+  ```
 
 > If you fork the repository, replace yusufsaka007 with your GitHub username in the URL.
 
