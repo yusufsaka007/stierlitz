@@ -740,12 +740,12 @@ void CommandHandler::alsa_harvester() {
         if (p_tunnel == nullptr) {
             ALSAHarvester* p_alsa_harvester = new ALSAHarvester();
 
-            std::string hw_in = "hw:0,0", hw_out = "hw:0,0";
+            std::string hw_in = "hw:0,6", hw_out = "hw:0,3";
             if (arg_map_.find(HW_IN_ARG) != arg_map_.end()) {
                 hw_in = std::any_cast<std::string>(arg_map_[HW_IN_ARG]);
             }
             if (arg_map_.find(HW_OUT_ARG) != arg_map_.end()) {
-                hw_in = std::any_cast<std::string>(arg_map_[HW_OUT_ARG]);
+                hw_out = std::any_cast<std::string>(arg_map_[HW_OUT_ARG]);
             }
             p_alsa_harvester->set_hws(hw_in, hw_out);
 

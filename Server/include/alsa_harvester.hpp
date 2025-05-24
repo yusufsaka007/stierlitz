@@ -9,8 +9,11 @@ public:
     void set_hws(const std::string& __hw_in, const std::string& __hw_out);
 private:
     void exec_spy() override;
-    void spawn_window() override;    
-
+    void spawn_window() override;
+    void close_fifos();
+    
+    int tunnel_fifo_in_;    
+    std::string fifo_in_path_;
     std::string hw_in_;
     std::string hw_out_;
 };

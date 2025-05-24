@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
             ssize_t bytes_read = read(fd, buffer, frame_size);
             if (bytes_read > 0) {
                 buffer[bytes_read] = '\0';
-                if (bytes_read > 254) {
+                if (bytes_read > 256) {
                     std::cout << RED <<  "Received frame size: " << bytes_read << RESET << std::endl;
                     std::vector<unsigned char> jpeg_data(buffer, buffer+bytes_read);
                     cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);

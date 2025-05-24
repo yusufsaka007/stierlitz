@@ -116,13 +116,12 @@ int SpyTunnel::udp_handshake(void* __arg, int __len) {
                 return -1;
             } else if (events[i].data.fd == tunnel_socket_) {
                 rc = recvfrom(tunnel_socket_, &handshake, sizeof(Status), 0, (sockaddr*) &tunnel_end_addr_, &tunnel_end_addr_len_);
-                std::cout << MAGENTA << "[SpyTunnel::udp_handshake] received handshake " << handshake << RESET;
                 if (rc < 0) {
                     return -1;
                 } else if (rc == 0) {
                     return -1;
                 }
-                
+                std::cout << MAGENTA << "[SpyTunnel::udp_handshake] received handshake " << handshake << RESET;
                 if (rc > 0 && handshake == UDP_ACK) {
                     epoll_ctl(epoll_fd.fd, EPOLL_CTL_DEL, tunnel_shutdown_fd_.fd, nullptr);
                     epoll_ctl(epoll_fd.fd, EPOLL_CTL_DEL, tunnel_socket_, nullptr);
