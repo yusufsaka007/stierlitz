@@ -8,7 +8,7 @@ class ScreenHunter : public SpyTunnel {
 public:
     ScreenHunter() = default;
     float fps_ = 0.1;
-    long timeout_ms;
+    long timeout_ms_;
     void set_fps(float __fps);
 protected:
     void spawn_window() override;

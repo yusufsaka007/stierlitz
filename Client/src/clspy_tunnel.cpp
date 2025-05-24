@@ -1,10 +1,11 @@
 #include "clspy_tunnel.hpp"
+#include "debug.hpp"
 
 void* cltunnel_helper(void* arg) {
     CLTunnel* tunnel = static_cast<CLTunnel*>(arg);
     tunnel->clspy_tunnel_->run();
 
-    printf("[cltunnel_helper] Thread finished\n");
+    DEBUG_PRINT("[cltunnel_helper] Thread finished\n");
 
     // Cleanup
     delete tunnel->clspy_tunnel_;
@@ -19,7 +20,7 @@ int CLSpyTunnel::init(const char* __ip, const int __port, const int __connection
     tunnel_addr_.sin_family = AF_INET;
     tunnel_addr_.sin_port = htons(__port);
     if (inet_pton(AF_INET, __ip, &tunnel_addr_.sin_addr) <= 0) {
-        printf("[CLSpyTunnel] Invalid address or address not supported: %s\n", __ip);
+        DEBUG_PRINT("[CLSpyTunnel] Invalid address or address not supported: %s\n", __ip);
         return -1;
     }
     tunnel_addr_len_ = sizeof(tunnel_addr_);
@@ -29,7 +30,7 @@ int CLSpyTunnel::init(const char* __ip, const int __port, const int __connection
     while (tries < 5) {
         tunnel_socket_ = socket(AF_INET, __connection_type, 0);
         if (tunnel_socket_ < 0) {
-            printf("[CLSpyTunnel] Socket creation failed: %s\n", strerror(errno));
+            DEBUG_PRINT("[CLSpyTunnel] Socket creation failed: %s\n", strerror(errno));
             return -1;
         }
 
@@ -40,20 +41,20 @@ int CLSpyTunnel::init(const char* __ip, const int __port, const int __connection
         if (connect(tunnel_socket_, (struct sockaddr*)&tunnel_addr_, tunnel_addr_len_) < 0) {
             close(tunnel_socket_);
             if (errno == ECONNREFUSED || errno == ETIMEDOUT) {
-                printf("[CLSpyTunnel] Trying to connect to the tunnel server\n");
+                DEBUG_PRINT("[CLSpyTunnel] Trying to connect to the tunnel server\n");
                 sleep(1); // Retry after a short delay
                 continue;
             } else {
-                printf("[CLSpyTunnel] Connection failed: %s\n", strerror(errno));
+                DEBUG_PRINT("[CLSpyTunnel] Connection failed: %s\n", strerror(errno));
                 return -1;
             }
         }
 
-        printf("[CLSpyTunnel] Connected to tunnel server\n");
+        DEBUG_PRINT("[CLSpyTunnel] Connected to tunnel server\n");
         break;
     }
     if (tries == 5) {
-        printf("[CLSpyTunnel] Failed to connect to tunnel server after multiple attempts\n");
+        DEBUG_PRINT("[CLSpyTunnel] Failed to connect to tunnel server after multiple attempts\n");
         return -1;
     }
     return 0;
@@ -67,12 +68,12 @@ int CLSpyTunnel::udp_handshake() {
     while (true) {
         argv_size_ = recvfrom(tunnel_socket_, argv_, BUFFER_SIZE, 0, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
         if (argv_size_ <= 0) {
-            printf("[udp_handshake] Error while receiving the argument from server\n");
+            DEBUG_PRINT("[udp_handshake] Error while receiving the argument from server\n");
             return -1;
         }
         int rc = sendto(tunnel_socket_, &handshake, sizeof(Status), 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_);
         if (rc <= 0) {
-            printf("[udp_handshake] Error while sending ACK\n");
+            DEBUG_PRINT("[udp_handshake] Error while sending ACK\n");
             return -1;
         }
 

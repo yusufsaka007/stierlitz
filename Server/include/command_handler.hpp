@@ -80,12 +80,14 @@ struct Argument {
 };
 
 struct Command {
+    std::string shortcut_;
     std::string description_;
     std::vector<int> optional_;
     std::vector<int> required_;
     void (CommandHandler::*p_command_func_)();
     CommandHandler* p_command_handler_;
     Command(
+        const std::string& __shortcut,
         const std::string& __description,
         void (CommandHandler::*__p_command_func)(),
         CommandHandler* __p_command_handler,

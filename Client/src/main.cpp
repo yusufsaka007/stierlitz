@@ -1,5 +1,6 @@
 #include "client.hpp"
 #include <signal.h>
+#include "debug.hpp"
 
 Client* client = nullptr;
 
@@ -21,7 +22,7 @@ int main(int argc, char* argv[]) {
     sigaction(SIGTERM, &sa, NULL);
     
     if (argc != 3) {
-        printf("Usage: %s <ip> <port>\n", argv[0]);
+        DEBUG_PRINT("Usage: %s <ip> <port>\n", argv[0]);
         return -1;
     }
 
@@ -30,7 +31,7 @@ int main(int argc, char* argv[]) {
 
     client = new Client(ip, port);
     if (client->init() < 0) {
-        printf("Failed to initialize client\n");
+        DEBUG_PRINT("Failed to initialize client\n");
         return -1;
     }
     client->start();

@@ -402,7 +402,7 @@ void Server::handle_c2() {
                     cmd[bytes_read] = '\0';
                     event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] C2 terminal message: " << cmd << RESET;
                     
-                    if (strncmp(cmd, "exit", 4) == 0) {
+                    if (bytes_read == 4 && strncmp(cmd, "exit", bytes_read) == 0) {
                         event_log << YELLOW << "[Server::handle_c2] C2 terminal exit command received" << RESET;
                         shutdown_flag_ = true;
 
@@ -412,16 +412,6 @@ void Server::handle_c2() {
                         }
 
                         goto c2_cleanup;
-                    } else if (strncmp(cmd, "debug", 5) == 0) {
-                        event_log << YELLOW << "[Server::handle_c2] Debug command received" << RESET;
-                        const char* debug_message = "Debug message from server\n";
-                        ssize_t bytes_written = write(c2_fifo_.fd_out, debug_message, strlen(debug_message));
-                        if (bytes_written < 0) {
-                            event_log << RED << "[Server::handle_c2] Error writing to FIFO: " << strerror(errno) << RESET;
-                            goto c2_cleanup;
-                        }
-                        event_log << LOG_MINOR_EVENTS << GREEN << "[Server::handle_c2] Debug message sent to C2 terminal" << RESET;
-                        continue;
                     }
                     command_handler.execute_command(cmd, bytes_read);                    
                 }

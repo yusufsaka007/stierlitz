@@ -1,4 +1,5 @@
 #include "clalsa_harvester.hpp"
+#include "debug.hpp"
 
 void CLALSAHarvester::run() {
     char status[sizeof(Status) + sizeof(int)];
@@ -7,7 +8,7 @@ void CLALSAHarvester::run() {
     memcpy(&hw_in_, argv_, argv_size_);
     hw_in_[argv_size_] = '\0';
 
-    printf("[run] HW_IN: %s\n", hw_in_);
+    DEBUG_PRINT("[run] HW_IN: %s\n", hw_in_);
 
     int rc = alsa_recorder_init();
     if (rc < 0) {
@@ -33,7 +34,7 @@ void CLALSAHarvester::run() {
             goto cleanup;
         }
 
-        printf("Master initialized\n");
+        DEBUG_PRINT("Master initialized\n");
 
         // Start capturing
         alsa_recorder_run();
@@ -41,7 +42,7 @@ void CLALSAHarvester::run() {
     
     
 cleanup:
-    printf("Starting cleanup!\n");
+    DEBUG_PRINT("Starting cleanup!\n");
     alsa_recorder_cleanup();
     return;    
 }
@@ -54,7 +55,7 @@ void CLALSAHarvester::alsa_recorder_run() {
 
     while (!tunnel_shutdown_flag_) {
         if ((err = snd_pcm_readi(capture_handle_, buffer_, buffer_frames_)) != buffer_frames_) {
-            printf("Failed to read from audio interface (%s)\n", snd_strerror(err));
+            DEBUG_PRINT("Failed to read from audio interface (%s)\n", snd_strerror(err));
             return;
         }
         if (send_sample(buffer_, buffer_frames_ * bytes_per_frame) < 0) {
@@ -66,11 +67,11 @@ void CLALSAHarvester::alsa_recorder_run() {
 int CLALSAHarvester::send_sample(char* __buffer, int __size) {
     int rc = sendto(tunnel_socket_, __buffer, __size, 0, (struct sockaddr*) &tunnel_addr_, tunnel_addr_len_);
     if (rc < 0) {
-        printf("Failed to send frame (%s)\n", strerror(errno));
+        DEBUG_PRINT("Failed to send frame (%s)\n", strerror(errno));
         return -1;
     }
     if (__size == 0) {
-        printf("Sent sample with size %d\n", __size);
+        DEBUG_PRINT("Sent sample with size %d\n", __size);
         return -1;
     }
 
@@ -81,45 +82,45 @@ int CLALSAHarvester::alsa_recorder_init() {
     int rc;
 
     if ((rc = snd_pcm_open(&capture_handle_, hw_in_, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-        fprintf(stderr, "cannot open audio device %s (%s)\n", hw_in_, snd_strerror(rc));
+        DEBUG_PRINT("cannot open audio device %s (%s)\n", hw_in_, snd_strerror(rc));
         return rc;
     }
 
     if ((rc = snd_pcm_hw_params_malloc(&hw_params_)) < 0) {
-        fprintf(stderr, "cannot allocate hardware parameters (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("cannot allocate hardware parameters (%s)\n", snd_strerror(rc));
         return rc;
     }
 
     if ((rc = snd_pcm_hw_params_any(capture_handle_, hw_params_)) < 0) {
-        fprintf(stderr, "Failed to initialize hardware parameter structure (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Failed to initialize hardware parameter structure (%s)\n", snd_strerror(rc));
         return rc;
     }
 
     if ((rc = snd_pcm_hw_params_set_access(capture_handle_, hw_params_, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-        fprintf(stderr, "Cannot set access type (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Cannot set access type (%s)\n", snd_strerror(rc));
         return rc;
     }
 
     if ((rc = snd_pcm_hw_params_set_format(capture_handle_, hw_params_, format_)) < 0) {
-        fprintf(stderr, " Cannot set sample format (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT(" Cannot set sample format (%s)\n", snd_strerror(rc));
         return rc;
     }
 
     if ((rc = snd_pcm_hw_params_set_rate_near(capture_handle_, hw_params_, &sample_rate_, 0)) < 0) {
-        fprintf(stderr, "Cannot set sample rate (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Cannot set sample rate (%s)\n", snd_strerror(rc));
         return rc;
     }
 
     if ((rc = get_channels()) < 0) {
-        fprintf(stderr, "No supported channels\n");
+        DEBUG_PRINT("No supported channels\n");
         return rc;
     }
     if ((rc = snd_pcm_hw_params_set_channels(capture_handle_, hw_params_, channels_)) < 0) {
-        fprintf(stderr, "Failed to set channel count (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Failed to set channel count (%s)\n", snd_strerror(rc));
         return rc;
     }
     if ((rc = snd_pcm_hw_params(capture_handle_, hw_params_)) < 0) {
-        fprintf(stderr, "Failed to set params (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Failed to set params (%s)\n", snd_strerror(rc));
         return rc;
     }
 
@@ -127,12 +128,12 @@ int CLALSAHarvester::alsa_recorder_init() {
     hw_params_ = nullptr;
 
     if ((rc = snd_pcm_prepare(capture_handle_)) < 0) {
-        fprintf(stderr, "Failed to prepare audio interface for use (%s)\n", snd_strerror(rc));
+        DEBUG_PRINT("Failed to prepare audio interface for use (%s)\n", snd_strerror(rc));
         return rc;
     }
 
 
-    printf("Initialization successful\n");
+    DEBUG_PRINT("Initialization successful\n");
     return 0;
 }
 
@@ -146,7 +147,7 @@ int CLALSAHarvester::get_channels() {
 
     for (int i=min_channels;i<=max_channels;i++) {
         if ((rc = snd_pcm_hw_params_test_channels(capture_handle_, hw_params_, i)) == 0) {
-            printf("%d channels supported\n", i);
+            DEBUG_PRINT("%d channels supported\n", i);
             if (i == 1) { // Mono is supported
                 channels_ = i;
             } else if (i == 2) { // But stereo is preferred

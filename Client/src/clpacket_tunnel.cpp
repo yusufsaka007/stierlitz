@@ -1,4 +1,5 @@
 #include "clpacket_tunnel.hpp"
+#include "debug.hpp"
 
 void CLPacketTunnel::run() {
     char file_name[MAX_FILE_NAME + 1] = {0};
@@ -6,16 +7,16 @@ void CLPacketTunnel::run() {
     // Receive the file name
     int received = recv(tunnel_socket_, file_name, MAX_FILE_NAME, 0);
     if (received <= 0) {
-        printf("[CLPacketTunnel] Error receiving file name: %s\n", strerror(errno));
+        DEBUG_PRINT("[CLPacketTunnel] Error receiving file name: %s\n", strerror(errno));
         return;
     }
 
     file_name[received] = '\0';
-    printf("[CLPacketTunnel::run] File name to send: %s\n", file_name);
+    DEBUG_PRINT("[CLPacketTunnel::run] File name to send: %s\n", file_name);
 
     FILE* file = fopen(file_name, "rb");
     if (!file) {
-        printf("[CLPacketTunnel::run] Failed to open file: %s\n", strerror(errno));
+        DEBUG_PRINT("[CLPacketTunnel::run] Failed to open file: %s\n", strerror(errno));
         return;
     }
 
@@ -23,7 +24,7 @@ void CLPacketTunnel::run() {
     while (!feof(file)) {
         size_t bytes_read = fread(buffer, 1, BUFFER_SIZE, file);
         if (ferror(file)) {
-            printf("[CLPacketTunnel::run] File read error\n");
+            DEBUG_PRINT("[CLPacketTunnel::run] File read error\n");
             fclose(file);
             return;
         }
@@ -36,7 +37,7 @@ void CLPacketTunnel::run() {
                     if (errno == EINTR) {
                         continue;
                     }
-                    printf("[CLPacketTunnel::run] Error while sending: %s\n", strerror(errno));
+                    DEBUG_PRINT("[CLPacketTunnel::run] Error while sending: %s\n", strerror(errno));
                     fclose(file);
                     return;
                 }
@@ -53,11 +54,11 @@ void CLPacketTunnel::run() {
             if (errno == EINTR) {
                 continue;
             } 
-            printf("[CLPacketTunnel::run] Error sending END_KEY: %s\n", strerror(errno));
+            DEBUG_PRINT("[CLPacketTunnel::run] Error sending END_KEY: %s\n", strerror(errno));
             return;
         }
         key_total_sent += key_sent;
     }
 
-    printf("[CLPacketTunnel] File sent successfully\n");
+    DEBUG_PRINT("[CLPacketTunnel] File sent successfully\n");
 }

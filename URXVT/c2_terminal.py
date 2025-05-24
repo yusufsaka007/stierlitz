@@ -6,6 +6,7 @@ import threading
 import select
 from colorama import Fore, Style, init
 import sys
+import pyfiglet
 
 init(autoreset=True)
 
@@ -54,6 +55,8 @@ if __name__ == "__main__":
         os.mkfifo(in_fifo_path)
     if not os.path.exists(out_fifo_path):
         os.mkfifo(out_fifo_path)
+
+    print(pyfiglet.figlet_format(text="stierlitz", font="future"))
 
     in_fifo = open_fifo(in_fifo_path, os.O_WRONLY)
     print(f"{Fore.GREEN}[+] Connected to the input FIFO")

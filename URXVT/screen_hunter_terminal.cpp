@@ -2,7 +2,7 @@
 #include <thread>
 #include <mutex>
 #include <opencv2/opencv.hpp>
-#include <jpeglib.h> // sudo apt install libjpeg-dev
+#include <jpeglib.h>
 #include <vector>
 #include "tunnel_terminal_include.hpp"
 
@@ -26,6 +26,7 @@ char* res_data = nullptr;
 int res_data_size = 0;
 unsigned char* rgb_data = nullptr;
 int rgb_data_size = 0;
+int time_to_sleep_ms = 0;
 
 void cleanup() {
     if (fifo_data != -1) {
@@ -81,8 +82,8 @@ void handle_data() {
         FD_SET(fifo_data, &data_fds);
 
         struct timeval timeout;
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = time_to_sleep_ms * 1000;
 
         int rc = select(fifo_data + 1, &data_fds, nullptr, nullptr, &timeout);
         if (rc < 0) {
@@ -90,8 +91,8 @@ void handle_data() {
             shutdown_flag.store(true);
             break;
         } else if (rc == 0) {
-            // Timeout 
-            continue;
+            std::cerr << RED << "[handle_data] Timeout occured!: " << RESET << std::endl;
+            break;
         }
 
         if (FD_ISSET(fifo_data, &data_fds)) {
@@ -129,7 +130,7 @@ void handle_data() {
                         FD_ZERO(&rgb_fds);
                         FD_SET(fifo_data, &rgb_fds);
                         
-                        struct timeval tv;
+                        struct timeval tv; // Inner timeout
                         tv.tv_sec = 3;
                         tv.tv_usec = 0;
 
@@ -147,9 +148,11 @@ void handle_data() {
                         bytes_read = read(fifo_data, rgb_data + total_read, rgb_data_size - total_read);
                         if (bytes_read < 0) {
                             std::cerr << RED << "[handle_data] Error reading from FIFO: " << strerror(errno) << RESET << std::endl;
+                            shutdown_flag.store(true);
                             break;
                         } else if (bytes_read == 0) {
                             std::cout << YELLOW << "[handle_data] FIFO closed by writer" << RESET << std::endl;
+                            shutdown_flag.store(true);
                             break;
                         } else {
                             if (bytes_read < 256) {
@@ -165,7 +168,10 @@ void handle_data() {
                             total_read += bytes_read;
                         }
                     }
-
+                    if (shutdown_flag.load()) {
+                        std::cout << YELLOW << "[handle_data] Terminating..." << RESET << std::endl;
+                        break;
+                    }
                     std::cout << MAGENTA << "[handle_data] Total received: " << total_read << RESET << std::endl; 
 
                     if (total_read == rgb_data_size && memcmp(rgb_data + (rgb_data_size - end_key_len), end_key, end_key_len) == 0) {
@@ -244,6 +250,8 @@ int main(int argc, char* argv[]) {
     res_data_size = sizeof(width) + sizeof(height) + res_update_key_len;
     res_data = new char[res_data_size];
 
+    time_to_sleep_ms = std::stoi(argv[6]);
+
     std::filesystem::create_directories("fifo");
      if (!std::filesystem::exists(fifo_data_name)) {
         if (mkfifo(fifo_data_name.c_str(), 0666) == -1) {
@@ -259,7 +267,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << GREEN << "[+] FIFO Connected" << RESET << "\n";
-    std::cout << GREEN << "\n\n====================Welcome to Screen Hunter====================\ntype help to see available commands\n" << RESET;
+    std::cout << GREEN << "\n\n====================Welcome to Screen Hunter====================\n" << RESET;
 
     handle_data();
 
