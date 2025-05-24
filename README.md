@@ -1,5 +1,6 @@
 # STIERLITZ
 ---
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-support-yellow?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/yusufsaka007)
 
 ![stierlitz](img/stierlitz.jpg)
 
