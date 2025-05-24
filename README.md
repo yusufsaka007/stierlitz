@@ -3,6 +3,8 @@
 
 ![stierlitz](img/stierlitz.jpg)
 
+> ⚠️ This project is for educational use only. I am **not responsible** for any misuse.
+
 **Stierlitz** is a Linux-based, multi-client spyware suite designed for red team operations. It provides a range of real-time surveillance and data exfiltration capabilities, including:
 
 -  Webcam capture with live display (`webcam-recorder`)
@@ -161,3 +163,92 @@ To change:
 * Implement additional commands such as `cat`, process listing, and remote shell.
 
 ---
+
+````markdown
+# Contributing and Issue Reporting Guidelines
+
+Thank you for taking the time to contribute to our project! Whether you’re submitting a bug report, suggesting improvements, or contributing code, your help is higly appreciated.
+
+---
+
+## Contributing
+
+I welcome contributions from everyone. Please follow these steps to contribute code:
+
+### 1. Fork and Clone the Repository
+- **Fork:** Click the "Fork" button at the top right of the repository page.
+- **Clone:** Clone your fork locally:
+  ```bash
+    git clone https://github.com/yusufsaka007/stierlitz.git
+````
+
+> If you fork the repository, replace yusufsaka007 with your GitHub username in the URL.
+
+* **Navigate:** Change into the project directory:
+
+  ```bash
+  cd yourrepository
+  ```
+
+### 2. Create a Feature Branch
+
+* Make a new branch to work on your feature or fix:
+
+  ```bash
+  git checkout -b feature/your-feature-name
+  ```
+
+### 3. Make Your Changes
+
+* **Code:** Write clean, well-documented code.
+* **Tests:** Include relevant unit tests when applicable.
+* **Documentation:** Update or add documentation as needed.
+
+### 4. Commit Your Changes
+
+* Use clear and descriptive commit messages:
+
+  ```bash
+  git commit -m "Add feature: Description of your changes"
+  ```
+
+### 5. Push and Create a Pull Request
+
+* **Push:** Upload your branch to your fork:
+
+  ```bash
+  git push origin feature/your-feature-name
+  ```
+* **Pull Request:** Open a pull request on GitHub against the `main` branch. Please provide a detailed description of your changes and any related issue numbers.
+
+### 6. Code Review
+
+* Be open to feedback. We may ask for changes before merging.
+* Once approved, your changes will be merged into the main branch.
+
+---
+
+## Reporting Issues
+
+If you encounter bugs or have suggestions for improvements, please help us by reporting them. Here’s how:
+
+### 1. Search for Existing Issues
+
+* Check the [Issues Tracker](https://github.com/yusufsaka007/stierlitz/issues) to see if your issue has already been reported.
+
+### 2. Open a New Issue
+
+* Click the "New Issue" button on the GitHub issues page.
+* Fill out the issue template with:
+
+  * **Title:** A short, descriptive title.
+  * **Description:** Detailed explanation of the problem:
+
+    * **Expected vs. Actual Behavior:** What you expected to happen versus what actually happened.
+    * **Steps to Reproduce:** Detailed steps to reliably reproduce the issue.
+    * **Screenshots/Logs:** Any error messages or screenshots if available.
+  * **Labels:** If you can, assign relevant labels such as `bug`, `enhancement`, or `documentation`.
+
+### 3. Submit the Issue
+
+* Once you’ve completed the form, click “Submit new issue.”
