@@ -77,7 +77,7 @@ Displays all active clients, their IP addresses, corresponding indexes, current 
 
 > ⚠️ Requires root privileges
 
-By default, it uses `/dev/input/event0`. To change the input device:
+To change the input device:
 
 ```bash
 -d <index> 
@@ -167,7 +167,7 @@ To change:
 
 # Contributing and Issue Reporting Guidelines
 
-Thank you for taking the time to contribute to our project! Whether you’re submitting a bug report, suggesting improvements, or contributing code, your help is higly appreciated.
+Thank you for taking the time to contribute to our project! Whether you’re submitting a bug report, suggesting improvements, or contributing code, your help is highly appreciated.
 
 ---
 
